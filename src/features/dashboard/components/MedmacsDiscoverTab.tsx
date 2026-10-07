@@ -590,7 +590,6 @@ const DiscoverReelSkeleton: React.FC = () => (
           src={currentReel.image_url}
           alt={currentReel.medical_topic}
           referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
           onError={(e) => {
             const target = e.currentTarget;
             if (!target.src.includes('wikimedia.org')) {
