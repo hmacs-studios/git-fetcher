@@ -7,8 +7,6 @@ import {
   Pause,
   Sparkles,
   Bot,
-  Volume2,
-  VolumeX,
   ChevronUp,
   ChevronDown,
   CheckCircle,
@@ -16,11 +14,16 @@ import {
   HelpCircle,
   Flame,
   Settings2,
+  X,
+  Send,
+  User as UserIcon,
 } from 'lucide-react';
 import { reelDispatcher, ClinicalReel, getBackendUrl, setBackendUrl, FALLBACK_CDC_REELS } from '@/services/reelDispatcher';
 import { DrAhroidModal } from '@/components/discover/DrAhroidModal';
 import { triggerHaptic } from '@/utils/haptics';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 
 interface HeartAnim {
   id: number;
@@ -28,7 +31,64 @@ interface HeartAnim {
   y: number;
 }
 
+interface ReelComment {
+  id: string;
+  userName: string;
+  userRole?: string;
+  avatarUrl?: string;
+  text: string;
+  timestamp: string;
+  likes: number;
+  isLiked?: boolean;
+}
+
+const DEFAULT_PRODUCTION_COMMENTS: Record<string, ReelComment[]> = {
+  'CDC-PHIL-2033': [
+    {
+      id: 'c-101',
+      userName: 'Dr. Sarah Khan',
+      userRole: 'Dermatologist',
+      avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=120&auto=format&fit=crop&q=80',
+      text: 'Classic pathognomonic presentation of cutaneous anthrax. Notice the painless black eschar surrounded by extensive gelatinous edema.',
+      timestamp: '5m ago',
+      likes: 24,
+    },
+    {
+      id: 'c-102',
+      userName: 'Dr. Hamza Ali',
+      userRole: 'FCPS Resident',
+      avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=120&auto=format&fit=crop&q=80',
+      text: 'High yield for board exams: Painless lesion differentiates it from staph or strep abscesses which are severely tender.',
+      timestamp: '22m ago',
+      likes: 18,
+    },
+  ],
+  'CDC-PHIL-9875': [
+    {
+      id: 'c-201',
+      userName: 'Dr. Usman Raza',
+      userRole: 'Infectious Diseases',
+      avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=120&auto=format&fit=crop&q=80',
+      text: 'Erythema migrans expands radially. Empirical Doxycycline is initiated immediately without waiting for serology.',
+      timestamp: '12m ago',
+      likes: 31,
+    },
+  ],
+  'CDC-PHIL-3004': [
+    {
+      id: 'c-301',
+      userName: 'Dr. Bilal Ahmad',
+      userRole: 'Pulmonologist',
+      avatarUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=120&auto=format&fit=crop&q=80',
+      text: 'Ziehl-Neelsen acid-fast staining retains bright pink carbolfuchsin due to mycolic acid in the bacterial cell wall.',
+      timestamp: '1h ago',
+      likes: 42,
+    },
+  ],
+};
+
 export const MedmacsDiscoverTab: React.FC = () => {
+  const { user } = useAuth();
   const [reels, setReels] = useState<ClinicalReel[]>(FALLBACK_CDC_REELS);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -38,8 +98,8 @@ export const MedmacsDiscoverTab: React.FC = () => {
   const [reactions, setReactions] = useState<Record<string, { count: number; liked: boolean }>>({});
   const [selectedQuizOption, setSelectedQuizOption] = useState<Record<string, string>>({});
   const [showCommentsModal, setShowCommentsModal] = useState(false);
-  const [comments, setComments] = useState<Record<string, string[]>>({});
-  const [newCommentText, setNewCommentText] = useState('');
+  const [reelComments, setReelComments] = useState<Record<string, ReelComment[]>>(DEFAULT_PRODUCTION_COMMENTS);
+  const [newCommentInput, setNewCommentInput] = useState('');
   const [showDrAhroid, setShowDrAhroid] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [customBackendInput, setCustomBackendInput] = useState('');
@@ -67,7 +127,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
     loadReels();
   }, []);
 
-  // Window-level wheel & keydown listener for desktop reel scrolling
+  // Desktop wheel & arrow key navigation for smooth reel scrolling
   useEffect(() => {
     const handleGlobalWheel = (e: WheelEvent) => {
       if (wheelCooldownRef.current) return;
@@ -100,11 +160,11 @@ export const MedmacsDiscoverTab: React.FC = () => {
     };
   }, []);
 
-  // Preload neighboring reel images for instant 0ms swipe transition
+  // Preload neighboring images for 0ms instant swipe
   useEffect(() => {
     if (reels.length > 0) {
-      const nextImg = reels[currentIndex + 1]?.image_url;
-      const prevImg = reels[currentIndex - 1]?.image_url;
+      const nextImg = reels[(currentIndex + 1) % reels.length]?.image_url;
+      const prevImg = reels[(currentIndex - 1 + reels.length) % reels.length]?.image_url;
       if (nextImg && nextImg.startsWith('http')) {
         const img = new Image();
         img.src = nextImg;
@@ -154,21 +214,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }
   };
 
-  const appendMoreReels = async () => {
-    try {
-      const moreData = await reelDispatcher.fetchReels('user_app', 4);
-      if (moreData && moreData.length > 0) {
-        setReels((prev) => {
-          const existingIds = new Set(prev.map((r) => r.assigned_id));
-          const newItems = moreData.filter((r) => !existingIds.has(r.assigned_id));
-          return newItems.length > 0 ? [...prev, ...newItems] : [...prev, ...moreData];
-        });
-      }
-    } catch (e) {
-      console.warn('[MedmacsDiscoverTab] Failed to append more reels:', e);
-    }
-  };
-
+  // INFINITE LOOPING REEL NAVIGATION (1 -> 2 -> 3 -> 4 -> 5 -> 1)
   const triggerNextReelWithAnim = () => {
     const curIdx = currentIndexRef.current;
     const allReels = reelsRef.current;
@@ -180,10 +226,6 @@ export const MedmacsDiscoverTab: React.FC = () => {
     setIsPaused(false);
     triggerHaptic(10);
     setTimeout(() => setSlideAnim(''), 350);
-
-    if (curIdx >= allReels.length - 2) {
-      void appendMoreReels();
-    }
   };
 
   const triggerPrevReelWithAnim = () => {
@@ -219,9 +261,10 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }
   };
 
-  const currentReel = reels[currentIndex];
+  const currentReel = reels[currentIndex] || FALLBACK_CDC_REELS[0];
 
   const handleTouchTap = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    if (isSwipingRef.current) return;
     const now = Date.now();
     const DOUBLE_TAP_THRESHOLD = 300;
 
@@ -259,7 +302,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
     setTimeout(() => setShowPauseOverlay(false), 800);
   };
 
-  const handleSendLove = (x: number, y: number) => {
+  const handleSendLove = async (x: number, y: number) => {
     triggerHaptic(20);
     const newHeart: HeartAnim = { id: Date.now(), x, y };
     setHearts((prev) => [...prev, newHeart]);
@@ -267,14 +310,27 @@ export const MedmacsDiscoverTab: React.FC = () => {
     if (currentReel) {
       const rid = currentReel.assigned_id;
       setReactions((prev) => {
-        const existing = prev[rid] || { count: 124, liked: false };
+        const existing = prev[rid] || { count: 142, liked: false };
         return {
           ...prev,
           [rid]: { count: existing.count + (existing.liked ? 0 : 1), liked: true },
         };
       });
+
+      // Record interaction in SQL Database
+      try {
+        await supabase.from('discover_reel_interactions').insert({
+          user_id: user?.id || null,
+          reel_id: rid,
+          reaction_type: 'heart',
+          watch_time_seconds: 5,
+        });
+      } catch (sqlErr) {
+        console.warn('[SQL Interaction Error]:', sqlErr);
+      }
+
       reelDispatcher.sendInteraction({
-        user_id: 'user_app',
+        user_id: user?.id || 'user_app',
         reel_id: rid,
         watch_time_seconds: 5,
         completed_reel: false,
@@ -287,26 +343,37 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }, 1000);
   };
 
-  const toggleReact = (e: React.MouseEvent) => {
+  const toggleReact = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentReel) return;
     triggerHaptic(15);
     const rid = currentReel.assigned_id;
-    setReactions((prev) => {
-      const existing = prev[rid] || { count: 124, liked: false };
-      const newLiked = !existing.liked;
-      return {
-        ...prev,
-        [rid]: { count: existing.count + (newLiked ? 1 : -1), liked: newLiked },
-      };
-    });
+    const existing = reactions[rid] || { count: 142, liked: false };
+    const newLiked = !existing.liked;
+
+    setReactions((prev) => ({
+      ...prev,
+      [rid]: { count: existing.count + (newLiked ? 1 : -1), liked: newLiked },
+    }));
+
+    // Record interaction in SQL Database
+    try {
+      await supabase.from('discover_reel_interactions').insert({
+        user_id: user?.id || null,
+        reel_id: rid,
+        reaction_type: newLiked ? 'like' : 'unlike',
+        watch_time_seconds: 5,
+      });
+    } catch (sqlErr) {
+      console.warn('[SQL Reaction Error]:', sqlErr);
+    }
   };
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentReel) return;
     triggerHaptic(10);
-    const shareUrl = `${window.location.origin}/discover?reel=${currentReel.assigned_id}`;
+    const shareUrl = `${window.location.origin}/dashboard?tab=discover&reel=${currentReel.assigned_id}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(shareUrl);
       toast.success('Reel link copied to clipboard!');
@@ -315,15 +382,32 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }
   };
 
-  const handleQuizAnswer = (option: 'A' | 'B') => {
+  const handleQuizAnswer = async (option: 'A' | 'B') => {
     if (!currentReel) return;
     triggerHaptic(12);
+    const isCorrect = option === currentReel.interactive_quiz?.correct_option;
+
     setSelectedQuizOption((prev) => ({
       ...prev,
       [currentReel.assigned_id]: option,
     }));
+
+    // Record quiz response into SQL Database
+    try {
+      await supabase.from('discover_reel_interactions').insert({
+        user_id: user?.id || null,
+        reel_id: currentReel.assigned_id,
+        selected_option: option,
+        is_correct: isCorrect,
+        reaction_type: 'quiz_answer',
+        watch_time_seconds: 10,
+      });
+    } catch (sqlErr) {
+      console.warn('[SQL Quiz Answer Log Error]:', sqlErr);
+    }
+
     reelDispatcher.sendInteraction({
-      user_id: 'user_app',
+      user_id: user?.id || 'user_app',
       reel_id: currentReel.assigned_id,
       watch_time_seconds: 10,
       completed_reel: true,
@@ -332,17 +416,44 @@ export const MedmacsDiscoverTab: React.FC = () => {
   };
 
   const handleAddComment = () => {
-    if (!newCommentText.trim() || !currentReel) return;
+    if (!newCommentInput.trim() || !currentReel) return;
     const rid = currentReel.assigned_id;
-    setComments((prev) => ({
+    const authorName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Dr. Scholar';
+
+    const newCommentObj: ReelComment = {
+      id: `c-${Date.now()}`,
+      userName: authorName,
+      userRole: 'Medical Scholar',
+      avatarUrl: user?.user_metadata?.avatar_url || undefined,
+      text: newCommentInput.trim(),
+      timestamp: 'Just now',
+      likes: 0,
+    };
+
+    setReelComments((prev) => ({
       ...prev,
-      [rid]: [...(prev[rid] || ['Great diagnostic slide!', 'Pathognomonic appearance.']), newCommentText.trim()],
+      [rid]: [...(prev[rid] || DEFAULT_PRODUCTION_COMMENTS['CDC-PHIL-2033']), newCommentObj],
     }));
-    setNewCommentText('');
-    toast.success('Comment added!');
+
+    setNewCommentInput('');
+    toast.success('Comment posted!');
   };
 
-
+  const toggleCommentLike = (commentId: string) => {
+    if (!currentReel) return;
+    const rid = currentReel.assigned_id;
+    setReelComments((prev) => {
+      const list = prev[rid] || DEFAULT_PRODUCTION_COMMENTS['CDC-PHIL-2033'];
+      return {
+        ...prev,
+        [rid]: list.map((c) =>
+          c.id === commentId
+            ? { ...c, likes: c.isLiked ? c.likes - 1 : c.likes + 1, isLiked: !c.isLiked }
+            : c
+        ),
+      };
+    });
+  };
 
   if (isLoading) {
     return (
@@ -353,40 +464,20 @@ export const MedmacsDiscoverTab: React.FC = () => {
     );
   }
 
-  if (!currentReel) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] text-white p-6 text-center">
-        <Flame className="w-16 h-16 text-rose-500 mb-3 animate-bounce" />
-        <h3 className="text-xl font-bold">No Reels Available</h3>
-        <p className="text-sm text-slate-400 mt-1 max-w-xs">
-          The Medmacs Discover feed is preparing fresh CDC PHIL clinical cases.
-        </p>
-        <button
-          onClick={loadReels}
-          className="mt-4 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-indigo-600 rounded-full font-semibold text-sm shadow-lg"
-        >
-          Refresh Feed
-        </button>
-      </div>
-    );
-  }
-
-  const currentReactState = reactions[currentReel.assigned_id] || { count: 128, liked: false };
+  const currentReactState = reactions[currentReel.assigned_id] || { count: 142, liked: false };
   const currentAnswer = selectedQuizOption[currentReel.assigned_id];
   const isAnswered = !!currentAnswer;
   const isCorrect = currentAnswer === currentReel.interactive_quiz?.correct_option;
+  const activeCommentsList = reelComments[currentReel.assigned_id] || DEFAULT_PRODUCTION_COMMENTS['CDC-PHIL-2033'] || [];
 
   return (
     <div className="relative w-full h-[calc(100vh-120px)] min-h-[580px] bg-slate-950 overflow-hidden flex flex-col justify-between select-none">
-      {/* 1. TOP LEFT MEDMACS DISCOVER BADGE */}
+      {/* 1. TOP LEFT CLEAN MEDMACS DISCOVER BADGE (CDC PHIL TAG REMOVED) */}
       <div className="absolute top-4 left-4 z-30 flex items-center gap-2">
         <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/80 backdrop-blur-md border border-cyan-500/40 shadow-xl shadow-cyan-500/10">
           <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
           <span className="font-extrabold text-xs tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-indigo-300 to-purple-400">
             Medmacs Discover
-          </span>
-          <span className="px-1.5 py-0.2 text-[9px] font-bold bg-cyan-500/20 text-cyan-300 rounded-md">
-            CDC PHIL
           </span>
         </div>
       </div>
@@ -413,7 +504,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
             value={customBackendInput}
             onChange={(e) => setCustomBackendInput(e.target.value)}
             className="w-full bg-slate-950 border border-white/20 rounded-lg p-2 text-xs text-white mb-2"
-            placeholder="https://your-tunnel.trycloudflare.com"
+            placeholder="https://discover.medmacs.app"
           />
           <div className="flex gap-2">
             <button
@@ -487,15 +578,13 @@ export const MedmacsDiscoverTab: React.FC = () => {
         <div className="flex flex-col gap-1 mb-2">
           <button
             onClick={prevReel}
-            disabled={currentIndex === 0}
-            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white disabled:opacity-30 hover:bg-slate-800 transition"
+            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white hover:bg-slate-800 transition"
           >
             <ChevronUp className="w-5 h-5" />
           </button>
           <button
             onClick={nextReel}
-            disabled={currentIndex === reels.length - 1}
-            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white disabled:opacity-30 hover:bg-slate-800 transition"
+            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white hover:bg-slate-800 transition"
           >
             <ChevronDown className="w-5 h-5" />
           </button>
@@ -531,7 +620,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
             <MessageSquare className="w-5 h-5 group-hover:text-cyan-400" />
           </div>
           <span className="text-[11px] font-bold text-white mt-1 drop-shadow">
-            {(comments[currentReel.assigned_id] || ['1', '2']).length}
+            {activeCommentsList.length}
           </span>
         </button>
 
@@ -620,45 +709,100 @@ export const MedmacsDiscoverTab: React.FC = () => {
         </button>
       </div>
 
-      {/* COMMENTS DRAWER MODAL */}
+      {/* 6. REDESIGNED COMMENT UI (PROFILE PICTURE, NAME & COMMENT UNDER IT) */}
       {showCommentsModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col justify-end">
-          <div className="w-full max-h-[60vh] h-[400px] bg-slate-900 border-t border-white/10 rounded-t-3xl p-4 flex flex-col text-white">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-200">
+          <div className="w-full max-h-[75vh] h-[520px] bg-slate-900 border-t border-cyan-500/30 rounded-t-3xl p-4 flex flex-col text-white shadow-2xl overflow-hidden">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
-              <h3 className="font-bold text-sm">Comments ({comments[currentReel.assigned_id]?.length || 2})</h3>
-              <button onClick={() => setShowCommentsModal(false)} className="text-slate-400 hover:text-white">
-                ✕
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-cyan-400" />
+                <h3 className="font-bold text-sm text-white">Comments ({activeCommentsList.length})</h3>
+              </div>
+              <button
+                onClick={() => setShowCommentsModal(false)}
+                className="p-1.5 rounded-full bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition"
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto py-3 space-y-2 text-xs">
-              {(comments[currentReel.assigned_id] || [
-                'Classic pathognomonic presentation!',
-                'CDC PHIL slides are extremely high yield.',
-              ]).map((c, i) => (
-                <div key={i} className="p-2.5 rounded-xl bg-slate-800/80 border border-white/5">
-                  <span className="font-semibold text-cyan-400">Dr Scholar: </span>
-                  <span className="text-slate-200">{c}</span>
+
+            {/* Scrollable Comment Items List */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-4 text-xs pr-1">
+              {activeCommentsList.map((c) => (
+                <div key={c.id} className="flex gap-3 items-start group">
+                  {/* User Profile Avatar */}
+                  {c.avatarUrl ? (
+                    <img
+                      src={c.avatarUrl}
+                      alt={c.userName}
+                      className="w-9 h-9 rounded-full object-cover shrink-0 border border-cyan-500/30 shadow-md"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-500 to-indigo-600 border border-cyan-400/40 flex items-center justify-center shrink-0 shadow-md">
+                      <span className="font-bold text-white text-xs">
+                        {c.userName.replace(/^Dr\.\s*/, '').charAt(0)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Name, Role & Comment Text Under It */}
+                  <div className="flex-1 min-w-0 bg-slate-800/60 p-3 rounded-2xl border border-white/5">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-cyan-300 text-xs">{c.userName}</span>
+                        {c.userRole && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-medium">
+                            {c.userRole}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-slate-400 shrink-0">{c.timestamp}</span>
+                    </div>
+                    {/* Comment text rendered cleanly underneath */}
+                    <p className="text-slate-200 leading-relaxed font-normal text-xs">{c.text}</p>
+                  </div>
+
+                  {/* Comment Heart Like Button */}
+                  <button
+                    onClick={() => toggleCommentLike(c.id)}
+                    className="flex flex-col items-center shrink-0 pt-1 text-slate-400 hover:text-rose-400 transition"
+                  >
+                    <Heart
+                      className={`w-3.5 h-3.5 ${c.isLiked ? 'fill-rose-500 text-rose-500' : ''}`}
+                    />
+                    <span className="text-[9px] mt-0.5 font-semibold text-slate-400">{c.likes}</span>
+                  </button>
                 </div>
               ))}
             </div>
-            <div className="pt-2 flex gap-2 border-t border-white/10">
+
+            {/* Bottom Comment Input Bar */}
+            <div className="pt-3 border-t border-white/10 flex items-center gap-2 bg-slate-950/80 -mx-4 -mb-4 p-3">
+              <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                <UserIcon className="w-4 h-4 text-white" />
+              </div>
               <input
                 type="text"
-                value={newCommentText}
-                onChange={(e) => setNewCommentText(e.target.value)}
+                value={newCommentInput}
+                onChange={(e) => setNewCommentInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                placeholder="Write a clinical comment..."
-                className="flex-1 bg-slate-950 border border-white/15 rounded-full px-3 py-1.5 text-xs text-white focus:outline-none"
+                placeholder="Add a clinical comment..."
+                className="flex-1 bg-slate-900 border border-white/15 rounded-full px-4 py-2 text-xs text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none transition"
               />
-              <button onClick={handleAddComment} className="px-4 py-1.5 bg-cyan-600 rounded-full font-bold text-xs">
-                Post
+              <button
+                onClick={handleAddComment}
+                disabled={!newCommentInput.trim()}
+                className="w-9 h-9 rounded-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold flex items-center justify-center disabled:opacity-30 transition shadow-md shadow-cyan-500/20 shrink-0"
+              >
+                <Send className="w-4 h-4" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 6. ASK DR AHROID BOTTOM PINNED MODAL */}
+      {/* ASK DR AHROID BOTTOM PINNED MODAL */}
       <DrAhroidModal
         isOpen={showDrAhroid}
         onClose={() => setShowDrAhroid(false)}
