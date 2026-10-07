@@ -572,23 +572,8 @@ export const MedmacsDiscoverTab: React.FC = () => {
         <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent pointer-events-none" />
       </div>
 
-      {/* 3. RIGHT SIDE CONTROLS (REACT, COMMENT, SHARE, NAV) */}
+      {/* 3. RIGHT SIDE CONTROLS (REACT, COMMENT, SHARE) */}
       <div className="absolute right-3 bottom-24 z-30 flex flex-col items-center gap-5">
-        {/* NEXT / PREV REEL NAV */}
-        <div className="flex flex-col gap-1 mb-2">
-          <button
-            onClick={prevReel}
-            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white hover:bg-slate-800 transition"
-          >
-            <ChevronUp className="w-5 h-5" />
-          </button>
-          <button
-            onClick={nextReel}
-            className="p-2 rounded-full bg-slate-900/70 border border-white/10 text-white hover:bg-slate-800 transition"
-          >
-            <ChevronDown className="w-5 h-5" />
-          </button>
-        </div>
 
         {/* REACT BUTTON */}
         <button onClick={toggleReact} className="flex flex-col items-center group">

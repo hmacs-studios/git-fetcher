@@ -147,7 +147,7 @@ class ReelDispatcher {
     };
 
     for (const baseUrl of candidateUrls) {
-      let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}`;
+      let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}&limit=50`;
       if (subject) url += `&subject=${encodeURIComponent(subject)}`;
 
       const controller = new AbortController();
