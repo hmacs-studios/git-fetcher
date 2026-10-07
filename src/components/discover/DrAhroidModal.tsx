@@ -79,6 +79,11 @@ export const DrAhroidModal: React.FC<DrAhroidModalProps> = ({
       }
 
       const promptContext = `You are Dr Ahroid, an elite medical board examiner and clinical professor for Medmacs.
+STRICT GUIDELINES:
+1. Focus strictly on clean, high-yield clinical medical knowledge.
+2. NEVER mention meta references, internal database codes, source libraries (such as CDC or PHIL), resolution tags ('lores'), file formats ('.jpg'), or country names in topic headers.
+3. Keep all disease titles and diagnostic explanations clean, concise, and professional.
+
 Medical Case: "${reelTopic}" (${reelCategory})
 Clinical Details: "${diagnosisText}"
 ${ragContextText ? `\nMedmacs Textbook RAG Knowledge Base:\n${ragContextText}\n` : ''}
