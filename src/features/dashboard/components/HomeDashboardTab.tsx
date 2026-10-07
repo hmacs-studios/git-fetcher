@@ -7,6 +7,7 @@ import {
   Crown,
   Flame,
   FlaskConical,
+  Gamepad2,
   Gauge,
   Sparkles,
   Star,
@@ -22,7 +23,10 @@ import { MCQProgressWidget } from '@/components/dashboard/MCQProgressWidget';
 import { DashboardActionCard } from './DashboardActionCard';
 import { DashboardAnnouncementCard } from './DashboardAnnouncementCard';
 import { InstituteDetailCard } from './InstituteDetailCard';
+import { DailyMedmacsPulseCard } from './DailyMedmacsPulseCard';
 import { HmacsProductModal } from './HmacsProductModal';
+import { useAllFeatureAccess } from '@/hooks/useFeatureAccess';
+import { FeatureLockModal } from '@/components/ui/FeatureLockModal';
 import medisticsLogo from '@/assets/hmacs/medistics_icon.svg';
 import medizenLogo from '@/assets/hmacs/medizen_icon.svg';
 import type {
@@ -99,6 +103,7 @@ export function HomeDashboardTab({
 }: HomeDashboardTabProps) {
   const [selectedProduct, setSelectedProduct] = useState<HmacsProduct | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [lockedFeatureModal, setLockedFeatureModal] = useState<{ open: boolean; title?: string }>({ open: false });
 
   const userPlanDisplayName = rawUserPlan.charAt(0).toUpperCase() + rawUserPlan.slice(1) + ' Plan';
 
@@ -125,9 +130,11 @@ export function HomeDashboardTab({
 
   return (
     <div>
-      <div className="mb-5">
-        <p className="mb-1 text-xs font-bold text-muted-foreground brand-syne">{greetingMessage}</p>
-        <h1 className="text-3xl sm:text-4xl font-black text-shimmer leading-[1.05] break-words brand-syne">{displayName}</h1>
+      <div className="mb-5 pt-4 sm:pt-6">
+        <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight break-words brand-syne">
+          <span className="text-muted-foreground font-bold">{greetingMessage}{greetingMessage.endsWith(',') || greetingMessage.endsWith('!') ? ' ' : ', '}</span>
+          <span className="text-shimmer font-black">{displayName}</span>
+        </h1>
         {dashboardNoticeLine && (
           <div className="mt-3 rounded-xl border border-amber-200/70 bg-[#fff8db] px-3 py-2 text-xs font-bold leading-relaxed text-amber-900 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
             {dashboardNoticeLine}
@@ -150,35 +157,52 @@ export function HomeDashboardTab({
             </div>
           </div>
         </div>
-      ) : (
-        <div className="relative mb-6 min-h-[100px]">
-          <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/12 to-accent/40 p-4 shadow-md shadow-primary/5 dark:from-primary/20 dark:to-accent/20">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Flame className="w-4 h-4 text-orange-500" /> {userStats?.currentStreak || 0} day streak
-              </span>
-              <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 text-[10px] px-2 font-bold shadow-sm">
-                Keep it up!
-              </Badge>
-            </div>
-            <Progress value={userStats?.accuracy || 0} className="h-2.5 mb-2" />
-            <div className="flex justify-between text-[11px] font-semibold">
-              <span className="text-primary">{userStats?.accuracy || 0}% accuracy</span>
-              <span className="text-muted-foreground">{userStats?.totalQuestions || 0} solved</span>
-            </div>
-          </div>
-          {userStatsLoading && (
-            <div className="absolute inset-0 bg-muted/50 rounded-2xl p-4 animate-pulse pointer-events-none">
-              <div className="h-4 bg-muted rounded w-1/3 mb-3" />
-              <div className="h-2.5 bg-muted rounded w-full mb-2" />
-              <div className="flex justify-between">
-                <div className="h-3 bg-muted rounded w-1/4" />
-                <div className="h-3 bg-muted rounded w-1/4" />
+      ) : (() => {
+        const accuracy = userStats?.accuracy || 0;
+        const streak = userStats?.currentStreak || 0;
+        const totalQuestions = userStats?.totalQuestions || 0;
+        const remark = totalQuestions === 0
+          ? { text: 'Start Practicing! 🚀', gradient: 'from-teal-500 to-cyan-500' }
+          : accuracy >= 85
+            ? { text: 'Outstanding! 🔥', gradient: 'from-emerald-500 to-teal-600' }
+            : accuracy >= 70
+              ? { text: 'Great Job! 👏', gradient: 'from-blue-500 to-indigo-500' }
+              : accuracy >= 50
+                ? { text: 'Keep Improving! 📈', gradient: 'from-amber-500 to-orange-500' }
+                : streak >= 3
+                  ? { text: 'On Fire! ⚡', gradient: 'from-purple-500 to-pink-500' }
+                  : { text: 'Build Momentum! 💪', gradient: 'from-slate-600 to-slate-700' };
+
+        return (
+          <div className="relative mb-6 min-h-[100px]">
+            <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/12 to-accent/40 p-4 shadow-md shadow-primary/5 dark:from-primary/20 dark:to-accent/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-orange-500" /> {streak} day streak
+                </span>
+                <Badge className={`bg-gradient-to-r ${remark.gradient} text-white border-0 text-[10px] px-2.5 py-0.5 font-bold shadow-sm transition-all`}>
+                  {remark.text}
+                </Badge>
+              </div>
+              <Progress value={accuracy} className="h-2.5 mb-2" />
+              <div className="flex justify-between text-[11px] font-semibold">
+                <span className="text-primary">{accuracy}% accuracy</span>
+                <span className="text-muted-foreground">{totalQuestions} solved</span>
               </div>
             </div>
-          )}
-        </div>
-      )}
+            {userStatsLoading && (
+              <div className="absolute inset-0 bg-muted/50 rounded-2xl p-4 animate-pulse pointer-events-none">
+                <div className="h-4 bg-muted rounded w-1/3 mb-3" />
+                <div className="h-2.5 bg-muted rounded w-full mb-2" />
+                <div className="flex justify-between">
+                  <div className="h-3 bg-muted rounded w-1/4" />
+                  <div className="h-3 bg-muted rounded w-1/4" />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
         <Zap className="text-amber-500 fill-amber-500 w-3.5 h-3.5" /> Quick Actions
@@ -258,11 +282,20 @@ export function HomeDashboardTab({
           </div>
           <div className="grid grid-cols-2 gap-3 mb-6">
             {instituteModules.map((action) => (
-          <DashboardActionCard key={action.title} action={action} flat offlineMode={isOfflineMode} />
+              <DashboardActionCard key={action.title} action={action} flat offlineMode={isOfflineMode} />
             ))}
           </div>
         </div>
       )}
+
+      {/* Daily Game Section */}
+      <div className="mt-6 mb-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Gamepad2 className="w-4 h-4 text-amber-500 animate-pulse-slow" />
+          <h2 className="text-sm font-bold text-foreground">Daily Game</h2>
+        </div>
+        <DailyMedmacsPulseCard profile={profile} isOfflineMode={isOfflineMode} />
+      </div>
 
       {dashboardAnnouncement ? (
         <DashboardAnnouncementCard announcement={dashboardAnnouncement} onOpen={() => onOpenAnnouncement(dashboardAnnouncement)} />
@@ -425,6 +458,13 @@ export function HomeDashboardTab({
         product={selectedProduct}
         open={isProductModalOpen}
         onOpenChange={setIsProductModalOpen}
+      />
+
+      <FeatureLockModal
+        open={lockedFeatureModal.open}
+        onClose={() => setLockedFeatureModal({ open: false })}
+        featureTitle={lockedFeatureModal.title}
+        instituteName={instituteData?.short_name || instituteData?.name}
       />
 
       <div className="text-center pt-2 pb-16">

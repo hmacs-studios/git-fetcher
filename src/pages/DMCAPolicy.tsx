@@ -25,30 +25,37 @@ const DMCAPolicy = () => {
           <p className="text-xs font-black uppercase tracking-[0.28em] text-primary">Copyright Notice</p>
           <h1 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">DMCA Copyright Policy</h1>
           <p className="mt-4 text-sm leading-7 text-slate-600 dark:text-slate-300">
-            Medmacs provides educational reference citations solely for academic verification and study support. 
-            All citations are brief excerpts reproduced under Fair Use principles for scholarly purpose. If you believe 
-            any referenced material available through Medmacs infringes your copyright, please submit a formal DMCA notice to our legal team.
+            Medmacs utilizes automated internal processing to verify medical question accuracy against academic textbook references. 
+            Medmacs does not publicly reproduce, display, or distribute copyrighted textbook excerpts or text to end users. 
+            Only standard bibliographic metadata (book title, author, edition, and page number) is referenced for verification indexing.
           </p>
 
           <div className="mt-8 space-y-5 text-sm leading-7 text-slate-700 dark:text-slate-300">
             <section>
-              <h2 className="font-black uppercase tracking-wider text-slate-900 dark:text-white">Requirements for DMCA Notice</h2>
+              <h2 className="font-black uppercase tracking-wider text-slate-900 dark:text-white">Internal Verification & Fair Use</h2>
+              <p className="mt-2 text-xs leading-relaxed text-slate-600 dark:text-slate-400">
+                All internal indexing operations are performed strictly for non-expressive algorithmic verification and educational accuracy validation. If you are a copyright holder and have concerns regarding any cataloged reference metadata, please submit a inquiry to our legal team.
+              </p>
+            </section>
+
+            <section>
+              <h2 className="font-black uppercase tracking-wider text-slate-900 dark:text-white">Requirements for DMCA Inquiry</h2>
               <p className="mt-2">
-                To submit a valid DMCA copyright claim, your written notification must include:
+                To submit a formal copyright notification or inquiry, your communication must include:
               </p>
               <ul className="mt-2 list-disc pl-5 space-y-1 text-xs">
-                <li>Identification of the copyrighted work claimed to have been infringed.</li>
-                <li>Identification of the specific reference citation or page URL within Medmacs.</li>
-                <li>Your contact information (full name, email address, phone number, and physical address).</li>
-                <li>A statement that you have a good faith belief that use of the material is not authorized by the copyright owner.</li>
-                <li>A statement made under penalty of perjury that the information in your notice is accurate.</li>
+                <li>Identification of the copyrighted work in question.</li>
+                <li>Identification of the specific cataloged book title or metadata entry within Medmacs.</li>
+                <li>Your full contact information (name, organization, email address, phone number, and physical address).</li>
+                <li>A statement confirming your authority to represent the copyright owner.</li>
+                <li>A statement made under penalty of perjury that the provided information is accurate.</li>
               </ul>
             </section>
 
             <section>
               <h2 className="font-black uppercase tracking-wider text-slate-900 dark:text-white">Designated DMCA Agent Contact</h2>
               <p className="mt-2">
-                Send DMCA copyright notices to our designated agent at:{' '}
+                Send DMCA copyright notices or inquiries to our designated agent at:{' '}
                 <a className="font-bold text-primary underline underline-offset-4" href="mailto:legal@medmacs.app">
                   legal@medmacs.app
                 </a>

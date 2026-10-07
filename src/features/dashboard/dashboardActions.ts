@@ -29,7 +29,7 @@ export const getPremiumActions = (): DashboardAction[] => [
   { title: 'AI Flashcards', description: 'AI flashcards by chapter', icon: CardsIcon, link: '/learn-with-ai', gradient: 'from-violet-500 to-fuchsia-600', iconColor: 'text-violet-100' },
 ];
 
-export const getInstituteActions = (components: DashboardComponents): DashboardAction[] => [
+export const getInstituteActions = (components: DashboardComponents, isSpecializedTest = false): DashboardAction[] => [
   { title: 'Practice SEQs', description: 'Subjective questions', icon: FileText, link: '/seqs', gradient: 'from-orange-500 to-red-600', iconColor: 'text-orange-200', enabled: components.seqs },
-  { title: 'Viva & Practicals', description: 'Ace your practicals', icon: Microscope, link: '/practicals', gradient: 'from-fuchsia-600 to-pink-700', iconColor: 'text-fuchsia-100', enabled: components.viva },
+  { title: 'Viva & Practicals', description: 'Ace your practicals', icon: Microscope, link: '/practicals', gradient: 'from-red-600 to-rose-700', iconColor: 'text-red-100', flatIconColor: 'text-red-500', enabled: !isSpecializedTest },
 ].filter((action) => action.enabled);

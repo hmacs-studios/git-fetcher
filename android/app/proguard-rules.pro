@@ -1,21 +1,41 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project specific ProGuard rules for Capacitor Android Release
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve Capacitor core and plugins
+-keep class com.getcapacitor.** { *; }
+-keep class com.hmacs.medmacs.** { *; }
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# JavaScript Interface methods used in WebView bridge
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# WebKit & WebView components
+-keep class android.webkit.** { *; }
+
+# Firebase & Play Services
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+
+# Meta / Facebook SDK
+-keep class com.facebook.** { *; }
+
+# Lottie Animations
+-keep class com.airbnb.lottie.** { *; }
+
+# Suppress missing optional class warnings for R8
+-dontwarn com.google.firebase.ktx.Firebase
+-dontwarn com.google.firebase.ktx.FirebaseKt
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+-dontwarn com.facebook.**
+-dontwarn com.airbnb.lottie.**
+-dontwarn org.apache.commons.**
+-dontwarn org.slf4j.**
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**
+
+# Preserve line numbers for crashlytics/stack trace debugging
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+

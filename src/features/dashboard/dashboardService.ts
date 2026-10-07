@@ -90,17 +90,11 @@ export function cacheProfile(userId: string, profile: DashboardProfile | null): 
   else localStorage.removeItem(cacheKey);
 }
 
-export function getDashboardGreeting(displayName: string, userId?: string): string {
+export function getDashboardGreeting(displayName?: string, userId?: string): string {
   const now = new Date();
   const currentHour = now.getHours();
-  const timeGreeting =
-    currentHour < 5 ? 'Late Night Focus'
-      : currentHour < 12 ? 'Good Morning'
-        : currentHour < 17 ? 'Good Afternoon'
-          : currentHour < 21 ? 'Good Evening'
-            : 'Good Night';
-  const seedSource = `${userId || displayName}-${now.toDateString()}-${currentHour}`;
-  const seed = seedSource.split('').reduce((sum, character) => sum + character.charCodeAt(0), 0);
-  const phrase = DASHBOARD_GREETING_PHRASES[seed % DASHBOARD_GREETING_PHRASES.length];
-  return `${timeGreeting}. ${phrase}`;
+  if (currentHour >= 5 && currentHour < 12) return '🌅 Good Morning';
+  if (currentHour >= 12 && currentHour < 17) return '☀️ Good Afternoon';
+  if (currentHour >= 17 && currentHour < 21) return '🌆 Good Evening';
+  return '🌙 Good Night';
 }

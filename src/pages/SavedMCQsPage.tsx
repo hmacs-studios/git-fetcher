@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import Seo from '@/components/Seo';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { FeatureLockModal } from '@/components/ui/FeatureLockModal';
 
 interface MCQ {
   id: string;
@@ -55,6 +57,15 @@ const SavedMCQsPage = () => {
   const { toast } = useToast();
   const [expandedMcqId, setExpandedMcqId] = useState<string | null>(null);
   const [mcqToUnsave, setMcqToUnsave] = useState<string | null>(null);
+  const [showLockModal, setShowLockModal] = useState(false);
+
+  const { isAccessible: isSavedQuestionsAccessible, isLoading: isFeatureLoading, planTier } = useFeatureAccess('saved_questions');
+
+  useEffect(() => {
+    if (!isFeatureLoading && !isSavedQuestionsAccessible) {
+      setShowLockModal(true);
+    }
+  }, [isFeatureLoading, isSavedQuestionsAccessible]);
 
   const { data: profile } = useQuery({
     queryKey: ['profile', user?.id],
@@ -79,7 +90,7 @@ const SavedMCQsPage = () => {
       if (detailsErr) throw detailsErr;
       return mcqDetails as MCQ[];
     },
-    enabled: !!user?.id,
+    enabled: !!user?.id && !isFeatureLoading && isSavedQuestionsAccessible,
   });
 
   const unsaveMCQMutation = useMutation({
@@ -334,6 +345,13 @@ const SavedMCQsPage = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      <FeatureLockModal
+        open={showLockModal}
+        onClose={() => setShowLockModal(false)}
+        featureTitle="Saved Questions"
+        planTierRequired="Premium"
+      />
     </div>
   );
 };

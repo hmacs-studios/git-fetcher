@@ -52,7 +52,11 @@ const aiStatusMessages: Record<number, string> = {
   503: 'AI is temporarily unavailable. Please try again shortly.',
 };
 
-export const aiApiFetch = async (path: string, init: RequestInit = {}) => {
+export interface AiApiInitOptions extends RequestInit {
+  silentLimitError?: boolean;
+}
+
+export const aiApiFetch = async (path: string, init: AiApiInitOptions = {}) => {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
 
@@ -77,7 +81,7 @@ export const aiApiFetch = async (path: string, init: RequestInit = {}) => {
       payload.code,
       payload,
     );
-    if (error.status === 403 || error.status === 429) {
+    if ((error.status === 403 || error.status === 429) && !init.silentLimitError) {
       _onAiLimitError?.(error);
     }
     throw error;
@@ -86,7 +90,7 @@ export const aiApiFetch = async (path: string, init: RequestInit = {}) => {
   return response;
 };
 
-export const aiApiJson = async <T = any>(path: string, body: unknown, init: RequestInit = {}): Promise<T> => {
+export const aiApiJson = async <T = any>(path: string, body: unknown, init: AiApiInitOptions = {}): Promise<T> => {
   const bodyStr = JSON.stringify(body);
   const response = await aiApiFetch(path, {
     ...init,

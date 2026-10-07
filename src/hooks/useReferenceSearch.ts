@@ -12,12 +12,25 @@ export function useReferenceSearch() {
         setLoading(true);
         setError(null);
         try {
-            const result = await aiApiJson<ReferenceResponse>('reference', { query, top_k: topK }, {});
+            // Use medmacs-ai gateway (works everywhere — web, Capacitor, dev)
+            // silentLimitError: true prevents quota popups for reference search
+            const result = await aiApiJson<ReferenceResponse>('reference', { query, top_k: topK }, { silentLimitError: true });
+            if (result && (result as any).error) {
+                setError((result as any).error);
+                setData(null);
+                return null;
+            }
             setData(result);
             return result;
         } catch (err: any) {
             console.error("Reference search failed:", err);
-            setError(err.message);
+            // Silently swallow quota/plan errors — references failing shouldn't block the quiz
+            if (err?.status === 403 || err?.status === 429) {
+                setData(null);
+                return null;
+            }
+            setError(err.message || 'Failed to search references');
+            setData(null);
             return null;
         } finally {
             setLoading(false);

@@ -1,4 +1,4 @@
-import { forwardRef, lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { forwardRef, lazy, Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -12,6 +12,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
 import { useReferenceSearch } from '@/hooks/useReferenceSearch';
+import { LottiePlayer } from '@/components/LottiePlayer';
 import { aiApiJson } from '@/utils/aiApi';
 import { isAiPolicyNotice } from '@/utils/aiPolicyNotice';
 import { fetchChapterById, fetchSubjectById, Chapter, Subject } from '@/utils/mcqData';
@@ -529,7 +530,9 @@ const DrAhroidVerificationBar = ({
               <div className="flex items-center gap-2.5 min-w-0">
                 <ShieldCheck className="h-4 w-4 shrink-0 text-teal-600/90 dark:text-teal-400/90" />
                 <span className="text-xs font-medium tracking-tight text-teal-800 dark:text-teal-200 truncate">
-                  Dr Ahroid confirms this question is correct. <span className="font-semibold">{verifiedBooksCount} book reference{verifiedBooksCount === 1 ? '' : 's'} found.</span>
+                  Dr Ahroid confirms this question is correct.{verifiedBooksCount > 0 ? (
+                    <> <span className="font-semibold">{verifiedBooksCount} reference{verifiedBooksCount === 1 ? '' : 's'} found.</span></>
+                  ) : null}
                 </span>
               </div>
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-300 underline underline-offset-2">
@@ -587,6 +590,30 @@ const formatSimilarity = (score?: number) => {
   return `${Math.round(percent)}%`;
 };
 
+const BookAnimationPlayer = () => {
+  const [animationData, setAnimationData] = useState<any>(null);
+
+  useEffect(() => {
+    fetch('/animations/Book.json')
+      .then((res) => res.json())
+      .then((data) => setAnimationData(data))
+      .catch((err) => console.error('Failed to load Book animation:', err));
+  }, []);
+
+  if (!animationData) {
+    return <Loader2 className="w-10 h-10 animate-spin text-teal-600 my-8" />;
+  }
+
+  return (
+    <LottiePlayer
+      animationData={animationData}
+      className="w-40 h-40 mx-auto"
+      loop={true}
+      autoplay={true}
+    />
+  );
+};
+
 const REFERENCE_VERIFICATION_COPY = {
   verified: {
     label: 'Question verified',
@@ -616,7 +643,7 @@ const isInternalVerification = (sourceBasis = '') =>
 const isExternalVerification = (sourceBasis = '') =>
   ['external', 'llm_knowledge'].includes(String(sourceBasis).toLowerCase());
 
-const EXTERNAL_VERIFIED_PREFIX = 'No internal reference found, however question appears to be correct.';
+const EXTERNAL_VERIFIED_PREFIX = '';
 
 const isGenericReferenceBook = (book = '') =>
   /^(reference source|referece source|reference)$/i.test(String(book).trim());
@@ -678,22 +705,25 @@ const ReferenceModal = ({
   onConfirm,
   isPremium,
   canUseAiSummary,
-  offlineMessage
+  offlineMessage,
+  onAskDrAhroid,
 }) => {
   const hasConfirmed = Array.isArray(confirmedIndexes);
   const hasSummary = Boolean(summary?.summary);
   const policyError = error && isAiPolicyNotice(error);
-  const [expandedCardKey, setExpandedCardKey] = useState<string | null>(null);
 
-  const toggleCardExpanded = (key: string) => {
-    setExpandedCardKey(prev => (prev === key ? null : key));
-  };
-
-  const visibleReferences = Array.isArray(references)
-    ? hasConfirmed
-      ? confirmedIndexes.map(index => references[index]).filter(Boolean)
-      : references
-    : [];
+  const visibleReferences = useMemo(() => {
+    if (!verification) {
+      return Array.isArray(references) ? references : [];
+    }
+    if (Array.isArray(verification.citations) && verification.citations.length > 0) {
+      return verification.citations;
+    }
+    if (Array.isArray(confirmedIndexes) && confirmedIndexes.length > 0 && Array.isArray(references)) {
+      return confirmedIndexes.map(index => references[index]).filter(Boolean);
+    }
+    return [];
+  }, [verification, references, confirmedIndexes]);
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -720,33 +750,28 @@ const ReferenceModal = ({
               </div>
             ) : null}
 
+            {/* Top Verification Status Container */}
             <AnimatePresence mode="wait" initial={false}>
-            {isConfirming ? (
+            {isConfirming || (isLoading && !verification) ? (
               <motion.div
                 key="verification-skeleton"
                 layout
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                className="mb-4 min-h-[156px] rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-zinc-950"
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="mb-3 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800/80 dark:bg-zinc-950/80"
               >
-                <div className="flex items-center gap-3">
-                  <Skeleton className="h-7 w-7 rounded-full" />
-                  <div className="space-y-2">
-                    <Skeleton className="h-4 w-36" />
-                    <Skeleton className="h-3 w-28" />
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="h-5 w-5 rounded-full bg-slate-300 dark:bg-slate-700 animate-pulse" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-3.5 w-32 bg-slate-300 dark:bg-slate-700 animate-pulse" />
+                    <Skeleton className="h-2.5 w-24 bg-slate-300/80 dark:bg-slate-700/80 animate-pulse" />
                   </div>
                 </div>
-                <div className="mt-5 space-y-2">
-                  <Skeleton className="h-3 w-full" />
-                  <Skeleton className="h-3 w-11/12" />
-                  <Skeleton className="h-3 w-8/12" />
-                </div>
-                <div className="mt-4 flex gap-2 overflow-hidden">
-                  <Skeleton className="h-6 w-32 shrink-0 rounded-full" />
-                  <Skeleton className="h-6 w-28 shrink-0 rounded-full" />
-                  <Skeleton className="h-6 w-36 shrink-0 rounded-full" />
+                <div className="mt-2 space-y-1.5">
+                  <Skeleton className="h-2.5 w-full bg-slate-300/70 dark:bg-slate-700/70 animate-pulse" />
+                  <Skeleton className="h-2.5 w-4/5 bg-slate-300/70 dark:bg-slate-700/70 animate-pulse" />
                 </div>
               </motion.div>
             ) : verification ? (() => {
@@ -755,38 +780,26 @@ const ReferenceModal = ({
                 <motion.div
                   key="verification-result"
                   layout
-                  initial={{ opacity: 0, y: 8 }}
+                  initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -8 }}
-                  transition={{ duration: 0.22, ease: 'easeOut' }}
-                  className={`mb-4 rounded-2xl border p-4 text-sm ${display.border}`}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                  className={`mb-3 rounded-xl border px-3.5 py-2.5 text-xs ${display.border}`}
                 >
-                  <div className="flex items-center gap-3">
-                    <VerificationStatusIcon icon={display.icon} className={`h-7 w-7 ${display.tone}`} />
+                  <div className="flex items-center gap-2.5">
+                    <VerificationStatusIcon icon={display.icon} className={`h-5 w-5 ${display.tone}`} />
                     <div>
-                      <div className={`font-black ${display.tone}`}>{display.label}</div>
-                      <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                        Dr Ahroid · {verification.cached ? 'cached · ' : ''}{verification.sourceBasis || 'none'}
+                      <div className={`font-black text-xs ${display.tone}`}>{display.label}</div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-muted-foreground">
+                        Dr Ahroid · {isInternalVerification(verification.sourceBasis) ? 'Textbook Reference' : 'System Verified'}
                       </div>
                     </div>
                   </div>
                   {verification.summary && (
-                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{verification.summary}</p>
-                  )}
-                  {isInternalVerification(verification.sourceBasis) && verification.verdict !== 'no_references' && Array.isArray(verification.citations) && verification.citations.length > 0 && (
-                    <div className="mt-3 flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1">
-                      {verification.citations.map((citation, index) => (
-                        <span
-                          key={`${citation.book || citation.title}-${citation.page || index}-${index}`}
-                          className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        >
-                          {citation.book || citation.title || 'Reference'}{citation.page ? ` p. ${citation.page}` : ''}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground">{verification.summary}</p>
                   )}
                   {verification.autoReported && (
-                    <p className="mt-2 text-xs font-bold text-red-600 dark:text-red-300">Auto-reported because Dr Ahroid found the marked answer likely wrong.</p>
+                    <p className="mt-1.5 text-[11px] font-bold text-red-600 dark:text-red-300">Auto-reported because Dr Ahroid found the marked answer likely wrong.</p>
                   )}
                 </motion.div>
               );
@@ -856,151 +869,149 @@ const ReferenceModal = ({
               </div>
             )}
 
-            {!offlineMessage && !isConfirming && isLoading && !verification && !isSummarizing && !summary && !error && (
-              <div className="space-y-3">
+            {/* Upcoming References Skeleton List — Active whenever references are loading */}
+            {!offlineMessage && (isConfirming || isLoading) && !isSummarizing && !summary && (
+              <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between gap-3">
-                  <Skeleton className="h-4 w-32 rounded-lg" />
-                  <Skeleton className="h-4 w-8 rounded-full" />
+                  <div className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-teal-600 dark:text-teal-400 animate-pulse" />
+                    <Skeleton className="h-3.5 w-28 rounded-md bg-slate-300 dark:bg-slate-700 animate-pulse" />
+                  </div>
+                  <Skeleton className="h-4 w-6 rounded-full bg-slate-300 dark:bg-slate-700 animate-pulse" />
                 </div>
-                {[1, 2].map((i) => (
-                  <div key={i} className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-zinc-950/80">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-40 rounded-lg" />
-                        <Skeleton className="h-3 w-20 rounded-md" />
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-slate-800/80 dark:bg-zinc-950/60 space-y-2.5"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 shrink-0 rounded-xl bg-teal-500/10 flex items-center justify-center">
+                        <BookOpen className="h-4 w-4 text-teal-600/60 dark:text-teal-400/60 animate-pulse" />
                       </div>
-                      <div className="min-w-[130px] space-y-1.5">
-                        <div className="flex justify-between">
-                          <Skeleton className="h-3 w-16" />
-                          <Skeleton className="h-3 w-8" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3.5 w-3/4 rounded-md bg-slate-300/80 dark:bg-slate-700/80 animate-pulse" />
+                        <div className="flex gap-2">
+                          <Skeleton className="h-2.5 w-20 rounded-md bg-slate-300/60 dark:bg-slate-700/60 animate-pulse" />
+                          <Skeleton className="h-2.5 w-14 rounded-md bg-slate-300/60 dark:bg-slate-700/60 animate-pulse" />
                         </div>
-                        <Skeleton className="h-2 w-full rounded-full" />
                       </div>
-                    </div>
-                    <div className="mt-3 rounded-xl border border-slate-200/50 bg-slate-100/50 p-3 dark:border-slate-800/50 dark:bg-slate-900/50 space-y-2">
-                      <Skeleton className="h-3 w-24" />
-                      <Skeleton className="h-3 w-full" />
-                      <Skeleton className="h-3 w-4/5" />
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
+            {/* Actual Book Reference Cards List */}
             {!offlineMessage && !isConfirming && !isLoading && !summary && visibleReferences.length > 0 && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                    Book References
-                  </h3>
-                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black text-primary">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-teal-500/15 text-teal-600 dark:text-teal-400">
+                      <BookOpen className="h-3.5 w-3.5" />
+                    </div>
+                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                      Book References
+                    </h3>
+                  </div>
+                  <span className="rounded-full bg-teal-500/10 px-2.5 py-0.5 text-[10px] font-black text-teal-700 dark:text-teal-300 border border-teal-500/20">
                     {visibleReferences.length}
                   </span>
                 </div>
 
                 {visibleReferences.map((reference, index) => {
-                  const shouldShowText = reference.show_extracted_text === true || reference.showExtractedText === true;
-                  const contextScore = typeof reference.score === 'number'
-                    ? Math.max(0, Math.min(100, Math.round(reference.score <= 1 ? reference.score * 100 : reference.score)))
-                    : null;
                   const cardKey = `${reference.book || 'Reference'}-${reference.page || index}-${index}`;
-                  const isExpanded = expandedCardKey === cardKey;
 
                   return (
                     <div
                       key={cardKey}
-                      onClick={() => toggleCardExpanded(cardKey)}
-                      className="cursor-pointer rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition-all hover:border-primary/30 dark:border-slate-800 dark:bg-zinc-950/80"
+                      className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-zinc-950/80 hover:border-teal-500/30 transition-all shadow-sm"
                     >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="text-sm font-black text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                            {reference.book || 'Reference'}
-                          </p>
-                          <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                            {reference.page ? `Page ${reference.page}` : 'Page not listed'}
-                          </p>
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-teal-500/20 bg-teal-500/10 text-teal-600 dark:bg-teal-950/40 dark:text-teal-400 shadow-sm">
+                          <BookOpen className="h-4.5 w-4.5" />
                         </div>
-                        <div className="flex items-center gap-3">
-                          <div className="min-w-[130px]">
-                            <div className="mb-1 flex items-center justify-between gap-2">
-                              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                                AI Confidence
+                        <div className="min-w-0 flex-1">
+                          {/* Book Name */}
+                          <p className="text-sm font-black text-slate-900 dark:text-slate-100 leading-snug">
+                            {reference.book || reference.title || 'Reference'}
+                          </p>
+                          {/* Metadata row */}
+                          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                            {(reference.author || reference.authors) && (
+                              <span className="text-[10px] font-semibold text-muted-foreground">
+                                {reference.author || reference.authors}
                               </span>
-                              <span className="text-[10px] font-black text-primary">
-                                {contextScore === null ? 'N/A' : `${contextScore}%`}
+                            )}
+                            {reference.edition && (
+                              <span className="text-[10px] font-semibold text-muted-foreground">
+                                {reference.edition}
                               </span>
-                            </div>
-                            <Progress value={contextScore ?? 0} className="h-2" />
-                          </div>
-                          <div className="text-muted-foreground hover:text-foreground">
-                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            )}
+                            {reference.page ? (
+                              <span className="text-[10px] font-bold text-teal-700 dark:text-teal-300 bg-teal-500/10 px-1.5 py-0.5 rounded-md">
+                                p. {reference.page}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold text-muted-foreground/60">
+                                Page not listed
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-
-                      {shouldShowText && reference.content && (
-                        <div className="mt-3 rounded-xl border border-primary/10 bg-primary/5 p-3">
-                          <p className="mb-1.5 text-[10px] font-black uppercase tracking-wider text-primary flex items-center justify-between">
-                            <span>Reference Citation</span>
-                            <span className="text-[9px] font-bold text-muted-foreground">
-                              {isExpanded ? 'Tap to collapse' : 'Tap to expand'}
-                            </span>
-                          </p>
-                          <p className={`whitespace-pre-wrap text-xs font-medium leading-relaxed text-slate-700 dark:text-slate-300 ${isExpanded ? '' : 'line-clamp-2'}`}>
-                            {reference.content}
-                          </p>
-                        </div>
-                      )}
                     </div>
                   );
                 })}
+              </div>
+            )}
 
+            {/* No reference state — when server couldn't verify */}
+            {!offlineMessage && !isConfirming && !isLoading && !summary && visibleReferences.length === 0 && verification && (verification.verdict === 'unconfirmed' || verification.verdict === 'no_references') && (
+              <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 p-6 text-center dark:border-slate-700 dark:bg-zinc-950/50">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-200/70 dark:bg-slate-800">
+                  <BotOff className="h-6 w-6 text-slate-500 dark:text-slate-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-slate-700 dark:text-slate-200">No Book Reference Found</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">No possible book reference could be found for this question in the current library.</p>
+                </div>
+                {onAskDrAhroid && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={onAskDrAhroid}
+                    className="mt-1 h-9 rounded-xl border-primary/30 px-4 text-xs font-bold text-primary hover:bg-primary/5"
+                  >
+                    <Bot className="mr-2 h-4 w-4" />
+                    Ask Dr Ahroid about this question
+                  </Button>
+                )}
               </div>
             )}
           </motion.div>
 
           <div className="shrink-0 border-t border-slate-200 px-5 py-3 dark:border-slate-800 bg-background">
-            <div className="mb-2.5 rounded-xl border border-slate-200/80 bg-slate-50/70 p-2.5 text-[10px] font-medium leading-relaxed text-muted-foreground dark:border-slate-800 dark:bg-slate-900/40">
-              <p>
-                <span className="font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">DMCA Disclaimer: </span>
-                Citations are brief excerpts provided solely for academic verification and study support under Fair Use. If you believe any referenced
-                material infringes your rights, review our{' '}
-                <a href="/dmca" className="font-bold text-slate-600 underline underline-offset-4 hover:text-primary dark:text-slate-300">
-                  DMCA Policy Page
-                </a>{' '}
-                or contact our designated agent at{' '}
-                <a href="mailto:legal@medmacs.app" className="font-bold text-slate-600 underline underline-offset-4 hover:text-primary dark:text-slate-300">
-                  legal@medmacs.app
-                </a>.
-              </p>
-            </div>
+            {visibleReferences.length > 0 && (
+              <div className="mb-2 rounded-lg bg-slate-100/60 dark:bg-slate-900/40 px-2.5 py-1 text-[9px] text-muted-foreground text-center">
+                <a href="/dmca" className="font-medium text-slate-500 dark:text-slate-400 underline underline-offset-2 hover:text-primary">
+                  DMCA Policy & Academic Fair Use
+                </a>
+              </div>
+            )}
             <div className="flex flex-col gap-2.5 sm:flex-row">
               <Button
                 variant="outline"
                 onClick={onSummarize}
                 disabled={Boolean(offlineMessage) || isSummarizing || isLoading}
-                className="rounded-xl disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-600"
+                className="w-full rounded-xl disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 dark:disabled:border-slate-800 dark:disabled:bg-slate-900 dark:disabled:text-slate-600"
               >
                 {isSummarizing ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Summarizing...</>
                 ) : hasSummary ? (
                   <><RotateCcw className="mr-2 h-4 w-4" /> Reload Summary</>
                 ) : (
-                  <><Sparkles className="mr-2 h-4 w-4" /> AI Summary</>
-                )}
-              </Button>
-              <Button
-                onClick={onConfirm}
-                disabled={Boolean(offlineMessage) || isConfirming || isLoading || hasConfirmed}
-                className="flex-1 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
-              >
-                {isConfirming ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Confirming...</>
-                ) : hasConfirmed ? (
-                  <><CheckCircle className="mr-2 h-4 w-4" /> Confirmed by Dr Ahroid</>
-                ) : (
-                  <><Sparkles className="mr-2 h-4 w-4" /> Confirm with Dr Ahroid</>
+                  <><Sparkles className="mr-2 h-4 w-4 text-primary" /> AI Summary</>
                 )}
               </Button>
             </div>
@@ -1153,68 +1164,13 @@ export const MCQDisplay = ({
       : [];
 
   const readCachedVerification = async () => {
-    if (!currentMCQ?.id) return null;
-
-    const { data, error } = await (supabase.from('question_reference_verifications') as any)
-      .select('verdict, source_basis, summary, citations, correct_answer_suggestion, marked_answer_wrong, auto_reported')
-      .eq('mcq_id', currentMCQ.id)
-      .maybeSingle();
-
-    if (error) {
-      console.warn('Reference verification cache read failed:', error);
-      return null;
-    }
-
-    if (!data) return null;
-    const cachedSourceBasis = data.source_basis || 'none';
-    const cachedVerdict = data.verdict || 'unconfirmed';
-    const citations = isInternalVerification(cachedSourceBasis) && cachedVerdict !== 'no_references'
-      ? normalizeCitations(data.citations)
-      : [];
-    const staleVerifiedBookCache =
-      data.verdict === 'verified' &&
-      isInternalVerification(cachedSourceBasis) &&
-      citations.length === 0;
-
-    if (staleVerifiedBookCache) return null;
-
-    const cachedSummary = String(data.summary || '').trim();
-
-    return {
-      verdict: cachedVerdict,
-      sourceBasis: cachedSourceBasis,
-      summary: cachedVerdict === 'verified' && isExternalVerification(cachedSourceBasis)
-        ? cachedSummary.startsWith(EXTERNAL_VERIFIED_PREFIX)
-          ? cachedSummary
-          : `${EXTERNAL_VERIFIED_PREFIX}${cachedSummary ? ` ${cachedSummary}` : ''}`
-        : cachedSummary,
-      citations,
-      correctAnswerSuggestion: data.correct_answer_suggestion || '',
-      markedAnswerWrong: data.marked_answer_wrong === true,
-      autoReported: data.auto_reported === true,
-      cached: true,
-    };
+    // Database caching completely disabled - always rely directly on live server validation
+    return null;
   };
 
-  const cacheVerification = async (verification: any) => {
-    if (!user || !currentMCQ?.id) return;
-
-    const { error } = await (supabase.from('question_reference_verifications') as any)
-      .upsert({
-        mcq_id: currentMCQ.id,
-        verdict: verification.verdict,
-        source_basis: verification.sourceBasis,
-        summary: verification.summary || '',
-        citations: normalizeCitations(verification.citations),
-        correct_answer_suggestion: verification.correctAnswerSuggestion || '',
-        marked_answer_wrong: verification.markedAnswerWrong === true,
-        auto_reported: verification.autoReported === true,
-        verified_by: user.id,
-      }, { onConflict: 'mcq_id' });
-
-    if (error) {
-      console.warn('Reference verification cache write failed:', error);
-    }
+  const cacheVerification = async (_verification: any) => {
+    // Database recording completely disabled - no writes to question_reference_verifications table
+    return;
   };
 
   const saveQuestionFeedback = async (feedback: 'up' | 'down') => {
@@ -1502,7 +1458,6 @@ export const MCQDisplay = ({
     if (!isOnline) {
       setSelectedReferenceIndex(null);
       setConfirmedReferenceIndexes(null);
-      setReferenceVerification(null);
       setReferenceSummary(null);
       setOptionExplanations({});
       setReferenceActionError('');
@@ -1513,37 +1468,12 @@ export const MCQDisplay = ({
     }
     setSelectedReferenceIndex(null);
     setConfirmedReferenceIndexes(null);
-    setReferenceVerification(null);
     setReferenceSummary(null);
     setOptionExplanations({});
     setReferenceActionError('');
     setOfflineReferenceMessage('');
     setIsReferenceModalOpen(true);
-    const [cached] = await Promise.all([
-      readCachedVerification(),
-      search(currentMCQ.question, 5),
-    ]);
-    if (cached) setReferenceVerification(cached);
-  };
-
-  const getFallbackConfirmedReferenceIndexes = (references = referenceResults) => {
-    const words = `${currentMCQ?.question || ''} ${currentMCQ?.correct_answer || ''} ${currentMCQ?.explanation || ''}`
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(word => word.length > 3);
-    const uniqueWords = Array.from(new Set(words));
-
-    return references
-      .map((ref, index) => {
-        const content = `${ref.content || ''}`.toLowerCase();
-        const matches = uniqueWords.filter(word => content.includes(word)).length;
-        return { index, matches, score: ref.score || 0 };
-      })
-      .filter(item => item.matches >= 2 || item.score >= 0.72)
-      .sort((a, b) => b.matches - a.matches || b.score - a.score)
-      .slice(0, 3)
-      .map(item => item.index);
+    search(currentMCQ.question, 5);
   };
 
   const autoReportQuestion = async (reason: string) => {
@@ -1601,33 +1531,28 @@ export const MCQDisplay = ({
         return raw;
       })();
 
-      const parsed = await aiApiJson<any>('reference-verify', {
+      const parsed = await aiApiJson<any>('medmacs-validation', {
         question: currentMCQ.question,
         correctAnswer: actualCorrectAnswerText,
         options: currentMCQ.shuffledOptions || currentMCQ.options || [],
         explanation: currentMCQ.explanation || '',
-      }, {});
+      }, { silentLimitError: true });
       const explicitNoInternalReferences =
         parsed?.verdict === 'no_references' ||
         ['none', 'external', 'llm_knowledge'].includes(String(parsed?.sourceBasis || '').toLowerCase());
       const matchingIndexes = Array.isArray(parsed?.matchingIndexes)
-        ? parsed.matchingIndexes.filter(index => Number.isInteger(index) && index >= 0 && index < localReferences.length)
+        ? parsed.matchingIndexes.filter(index => Number.isInteger(index) && index >= 0)
         : [];
-      const finalIndexes = explicitNoInternalReferences
-        ? []
-        : (matchingIndexes.length > 0 ? matchingIndexes : getFallbackConfirmedReferenceIndexes(localReferences));
+      const finalIndexes = explicitNoInternalReferences ? [] : matchingIndexes;
       const allowedVerdicts = ['verified', 'incorrect', 'no_references', 'unconfirmed'];
-      const verdict = allowedVerdicts.includes(parsed?.verdict)
-        ? parsed.verdict
-        : (finalIndexes.length > 0 ? 'verified' : 'unconfirmed');
+      const rawVerdict = allowedVerdicts.includes(parsed?.verdict) ? parsed.verdict : 'unconfirmed';
+      const verdict = rawVerdict === 'incorrect' ? 'unconfirmed' : rawVerdict;
       const sourceBasis = explicitNoInternalReferences ? (parsed?.sourceBasis || 'none') : (parsed?.sourceBasis || 'internal');
       const apiCitations = normalizeCitations(parsed?.citations);
       const localCitations = normalizeCitations(finalIndexes.map(index => localReferences[index]).filter(Boolean));
-      const citations = isInternalVerification(sourceBasis) && verdict !== 'no_references'
+      const citations = isInternalVerification(sourceBasis) && verdict !== 'no_references' && verdict !== 'unconfirmed'
         ? (apiCitations.length > 0 ? apiCitations : localCitations)
         : [];
-      const shouldAutoReport = verdict === 'incorrect' || parsed?.markedAnswerWrong === true;
-      let autoReported = false;
       const normalizedSummary = String(parsed?.summary || '').trim();
       const summary = verdict === 'verified' && isExternalVerification(sourceBasis)
         ? normalizedSummary.startsWith(EXTERNAL_VERIFIED_PREFIX)
@@ -1636,43 +1561,34 @@ export const MCQDisplay = ({
         : normalizedSummary;
 
       setConfirmedReferenceIndexes(finalIndexes);
-      if (shouldAutoReport) {
-        autoReported = await autoReportQuestion(
-          `Auto-report by Dr Ahroid: marked answer likely incorrect. Suggested answer: ${parsed?.correctAnswerSuggestion || 'Not provided'}. Basis: ${parsed?.sourceBasis || 'unspecified'}. Summary: ${parsed?.summary || 'No summary.'}`
-        );
-        if (autoReported) {
-          toast({ title: "Question auto-reported", description: "Dr Ahroid found the marked answer may be wrong." });
-        }
-      }
       const verification = {
         verdict,
         sourceBasis,
         summary,
         citations,
-        correctAnswerSuggestion: parsed?.correctAnswerSuggestion || '',
-        markedAnswerWrong: parsed?.markedAnswerWrong === true,
-        autoReported,
+        correctAnswerSuggestion: '',
+        markedAnswerWrong: false,
+        autoReported: false,
       };
       setReferenceVerification(verification);
       await cacheVerification(verification);
     } catch (error) {
-      if (isAiPolicyNotice(error?.message || '')) {
+      // 403 / 429 = quota or plan limit. With silentLimitError the modal is already suppressed;
+      // also suppress the in-sheet error text so the user only sees "unconfirmed" state.
+      const isQuotaError = (error as any)?.status === 403 || (error as any)?.status === 429;
+      if (!isQuotaError && isAiPolicyNotice(error?.message || '')) {
         setReferenceActionError(error.message);
         return;
       }
-      const fallbackIndexes = getFallbackConfirmedReferenceIndexes(localReferences);
       const fallbackVerification = {
-        verdict: fallbackIndexes.length > 0 ? 'verified' : 'unconfirmed',
-        sourceBasis: 'internal',
-        summary: fallbackIndexes.length > 0
-          ? 'Dr Ahroid found local references that appear to support this question.'
-          : 'Dr Ahroid could not confirm this question from available local references.',
-        citations: normalizeCitations(fallbackIndexes.map(index => localReferences[index]).filter(Boolean)),
+        verdict: 'unconfirmed',
+        sourceBasis: 'none',
+        summary: 'Dr Ahroid reference verification service is temporarily unavailable. Please try again shortly.',
+        citations: [],
         autoReported: false,
       };
-      setConfirmedReferenceIndexes(fallbackIndexes);
+      setConfirmedReferenceIndexes([]);
       setReferenceVerification(fallbackVerification);
-      toast({ title: "Dr Ahroid used local confirmation", description: "AI service was unavailable, so references were checked locally." });
     } finally {
       setIsConfirmingReferences(false);
     }
@@ -1833,8 +1749,62 @@ export const MCQDisplay = ({
     };
   }, []);
 
+  const isChatbotOpenRef = useRef(isChatbotOpen);
+  isChatbotOpenRef.current = isChatbotOpen;
+  const showSettingsModalRef = useRef(showSettingsModal);
+  showSettingsModalRef.current = showSettingsModal;
+  const isReferenceModalOpenRef = useRef(isReferenceModalOpen);
+  isReferenceModalOpenRef.current = isReferenceModalOpen;
+  const isUnconfirmedModalOpenRef = useRef(isUnconfirmedModalOpen);
+  isUnconfirmedModalOpenRef.current = isUnconfirmedModalOpen;
+  const showReportModalRef = useRef(showReportModal);
+  showReportModalRef.current = showReportModal;
+  const showUpgradeModalRef = useRef(showUpgradeModal);
+  showUpgradeModalRef.current = showUpgradeModal;
+  const showLeaveModalRef = useRef(showLeaveModal);
+  showLeaveModalRef.current = showLeaveModal;
+  const isDrawerOpenRef = useRef(isDrawerOpen);
+  isDrawerOpenRef.current = isDrawerOpen;
+
   useEffect(() => {
     let isMounted = true;
+    const handleBackAction = () => {
+      if (isChatbotOpenRef.current) {
+        setIsChatbotOpen(false);
+        return;
+      }
+      if (showSettingsModalRef.current) {
+        setShowSettingsModal(false);
+        return;
+      }
+      if (isReferenceModalOpenRef.current) {
+        setIsReferenceModalOpen(false);
+        return;
+      }
+      if (isUnconfirmedModalOpenRef.current) {
+        setIsUnconfirmedModalOpen(false);
+        return;
+      }
+      if (showReportModalRef.current) {
+        setShowReportModal(false);
+        return;
+      }
+      if (showUpgradeModalRef.current) {
+        setShowUpgradeModal(false);
+        return;
+      }
+      if (isDrawerOpenRef.current) {
+        setIsDrawerOpen(false);
+        return;
+      }
+      if (showLeaveModalRef.current) {
+        setShowLeaveModal(false);
+        return;
+      }
+
+      setShowLeaveModal(true);
+    };
+
     const setupBackButtonListener = async () => {
       if (typeof window !== 'undefined') {
         try {
@@ -1842,8 +1812,7 @@ export const MCQDisplay = ({
           if (Capacitor.isNativePlatform()) {
             const { App } = await import('@capacitor/app');
             const backListener = await App.addListener('backButton', () => {
-              if (showExplanation) { handleNextQuestion(); return; }
-              setShowLeaveModal(true);
+              handleBackAction();
             });
             return () => { if (isMounted) backListener.remove(); };
           }
@@ -1853,7 +1822,7 @@ export const MCQDisplay = ({
     };
     const cleanupPromise = setupBackButtonListener();
     return () => { isMounted = false; cleanupPromise.then(cleanup => cleanup && cleanup()); };
-  }, [showExplanation]);
+  }, []);
 
   useEffect(() => {
     const qId = currentMCQ?.id;
@@ -2054,7 +2023,6 @@ export const MCQDisplay = ({
           setReferenceVerification(cached);
           setIsConfirmingReferences(false);
         } else if (isOnline) {
-          setIsConfirmingReferences(false);
           handleConfirmReferences([], true);
         } else {
           setIsConfirmingReferences(false);
@@ -2287,7 +2255,7 @@ export const MCQDisplay = ({
             <DrAhroidVerificationBar
               isVerifying={isConfirmingReferences}
               verification={referenceVerification}
-              verifiedBooksCount={verifiedAgainstBooks.length || (referenceVerification?.citations?.length || 1)}
+              verifiedBooksCount={Array.isArray(referenceVerification?.citations) ? referenceVerification.citations.length : (verifiedAgainstBooks.length || 0)}
               onOpenReferences={handleSearchReference}
               onOpenChat={() => {
                 setChatPrefillPrompt("Dr Ahroid, why is this question marked contraindicated or incorrect according to the medical book syllabus?");
@@ -2396,8 +2364,8 @@ export const MCQDisplay = ({
                   </div>
                 </div>
 
-                {/* Reference Button */}
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {/* Reference & AI Action Buttons */}
+                <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-3">
                   <Button
                     onClick={handleSearchReference}
                     variant="outline"
@@ -2409,7 +2377,7 @@ export const MCQDisplay = ({
                     ) : (
                       <CheckCircle className="w-4 h-4 mr-2" />
                     )}
-                    {isConfirmingReferences ? 'Verifying Question' : 'Find Reference'}
+                    {isConfirmingReferences ? 'Verifying...' : 'Find Reference'}
                   </Button>
                   <Button
                     onClick={handleExplainOptions}
@@ -2423,6 +2391,16 @@ export const MCQDisplay = ({
                       <Sparkles className="w-4 h-4 mr-2" />
                     )}
                     {isExplainingOptions ? 'Explaining...' : 'Options Explain'}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setChatPrefillPrompt("Can you please explain this question and explanation in more detail?");
+                      setIsChatbotOpen(true);
+                    }}
+                    className="w-full h-11 rounded-xl text-sm font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-md shadow-teal-500/20 transition-all active:scale-[0.99]"
+                  >
+                    <Bot className="w-4.5 h-4.5 mr-2" />
+                    Learn More with Dr Ahroid
                   </Button>
                 </div>
               </motion.section>
@@ -2515,13 +2493,13 @@ export const MCQDisplay = ({
       />}
       {showLeaveModal && <LeaveTestModal isOpen={showLeaveModal} onClose={() => setShowLeaveModal(false)} onConfirm={() => { setShowLeaveModal(false); onBack(); }} />}
       {showReportModal && <ReportMCQModal isOpen={showReportModal} onClose={() => setShowReportModal(false)} onSubmit={handleReportSubmit} isSubmitting={isReportSubmitting} />}
-      {showUpgradeModal && <UpgradeAccountModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgradeClick={handleUpgradeClick} message={upgradeModalMessage} />}
+      {!showLeaveModal && showUpgradeModal && <UpgradeAccountModal isOpen={showUpgradeModal} onClose={() => setShowUpgradeModal(false)} onUpgradeClick={handleUpgradeClick} message={upgradeModalMessage} />}
       {isReferenceModalOpen && <ReferenceModal
         isOpen={isReferenceModalOpen}
         onClose={() => setIsReferenceModalOpen(false)}
         references={referenceResults}
         isLoading={isSearchingReference}
-        error={referenceActionError || referenceError}
+        error={referenceActionError || undefined}
         selectedIndex={selectedReferenceIndex}
         setSelectedIndex={setSelectedReferenceIndex}
         confirmedIndexes={confirmedReferenceIndexes}
@@ -2538,6 +2516,11 @@ export const MCQDisplay = ({
         isPremium={isPremium}
         canUseAiSummary={canUseAiSummary}
         offlineMessage={offlineReferenceMessage}
+        onAskDrAhroid={() => {
+          setIsReferenceModalOpen(false);
+          setChatPrefillPrompt("Dr Ahroid, no book reference could be found for this question. Can you explain whether this question is valid and what the correct answer should be based on medical knowledge?");
+          setIsChatbotOpen(true);
+        }}
       />}
       {isUnconfirmedModalOpen && (
         <DrAhroidUnconfirmedInfoModal

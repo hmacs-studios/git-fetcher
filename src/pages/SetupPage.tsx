@@ -70,22 +70,6 @@ const SetupWizard = () => {
   const [saving, setSaving] = useState(false);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [selectionCategory, setSelectionCategory] = useState<SetupSelectionCategory>('institute');
-  const [showFcpsFreeBadge, setShowFcpsFreeBadge] = useState(false);
-
-  useEffect(() => {
-    let hideTimer: NodeJS.Timeout;
-    const interval = setInterval(() => {
-      setShowFcpsFreeBadge(true);
-      hideTimer = setTimeout(() => {
-        setShowFcpsFreeBadge(false);
-      }, 10000);
-    }, 16000);
-
-    return () => {
-      clearInterval(interval);
-      if (hideTimer) clearTimeout(hideTimer);
-    };
-  }, []);
 
   const [username, setUsername] = useState('');
   const [institute, setInstitute] = useState('');
@@ -964,7 +948,11 @@ const SetupWizard = () => {
                   : "We'll tailor content for your college."}
               </p>
               {studyPathChangeMode && (
-                <p className="mt-3 rounded-2xl border border-cyan-300/20 bg-cyan-400/10 px-4 py-3 text-xs font-bold text-cyan-100">
+                <p className={`mt-3 rounded-2xl border px-4 py-3 text-xs font-bold transition-colors ${
+                  setupIsDark
+                    ? 'border-cyan-400/20 bg-cyan-950/40 text-cyan-200'
+                    : 'border-cyan-600/20 bg-cyan-50 text-cyan-900'
+                }`}>
                   You can change institute or specialized test once per week. This weekly cooldown starts after you save this change.
                 </p>
               )}
@@ -980,14 +968,6 @@ const SetupWizard = () => {
                   Specialized Tests
                 </TabsTrigger>
               </TabsList>
-              {showFcpsFreeBadge && selectionCategory !== 'specialized_test' && (
-                <div className="absolute right-0 top-full mt-1.5 z-50 animate-bounce flex flex-col items-center w-1/2 pointer-events-none">
-                  <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-red-600" />
-                  <div className="rounded-full bg-red-600 px-3 py-1 text-[11px] font-black text-white shadow-xl whitespace-nowrap tracking-wide">
-                    FCPS Part 1 is totally free! 🚀
-                  </div>
-                </div>
-              )}
             </Tabs>
             <div className="space-y-3 max-h-[40vh] overflow-y-auto px-1 overscroll-contain">
               {sortedGroupNames.map((groupName) => (
@@ -1119,23 +1099,6 @@ const SetupWizard = () => {
             </motion.div>
             <h2 className={`${headingClass} mb-3`}>You're All Set!</h2>
             <p className="text-white/70 text-lg">Your profile is complete. Let's start learning!</p>
-            <Button
-              onClick={handleNext}
-              disabled={saving}
-              className={`mt-8 h-14 w-full max-w-md rounded-2xl font-black shadow-2xl transition-all active:scale-95 ${
-                setupIsDark
-                  ? 'bg-white text-black hover:bg-white/90'
-                  : 'bg-gradient-to-r from-cyan-600 to-teal-500 text-white hover:from-cyan-500 hover:to-teal-400 shadow-cyan-700/20'
-              }`}
-            >
-              {saving ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <span className="flex items-center justify-center gap-2">
-                  Go to Dashboard <Sparkles className={`h-5 w-5 ${setupIsDark ? 'fill-black' : 'fill-white'}`} />
-                </span>
-              )}
-            </Button>
           </div>
         );
     }
@@ -1231,7 +1194,7 @@ const SetupWizard = () => {
         </AnimatePresence>
       </div>
 
-      {currentStep !== 6 && (
+
       <div className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+24px)] left-6 right-6 z-50">
         <div className="mb-4 flex items-center justify-center gap-2.5">
           {steps.map((_, i) => (
@@ -1283,12 +1246,11 @@ const SetupWizard = () => {
             ) : currentStep === 0 ? (
               <span className="flex items-center gap-2">Let's Go <ChevronRight className="h-5 w-5" /></span>
             ) : (
-              <span className="flex items-center gap-2">Next <ChevronRight className="h-5 w-5" /></span>
+              <span className="flex items-center gap-2">Continue <ChevronRight className="h-5 w-5" /></span>
             )}
           </Button>
         </div>
       </div>
-      )}
     </div>
   );
 };

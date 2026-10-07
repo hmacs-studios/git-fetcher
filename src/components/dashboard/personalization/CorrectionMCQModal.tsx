@@ -95,7 +95,7 @@ export const CorrectionMCQModal = ({ open, chapter, onOpenChange }: CorrectionMC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl overflow-hidden rounded-3xl border-border/40 p-0">
+      <DialogContent className="fixed bottom-0 top-auto left-1/2 -translate-x-1/2 translate-y-0 max-w-2xl max-h-[85vh] overflow-y-auto rounded-t-[2.5rem] rounded-b-none border-border/40 p-0 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
         <DialogHeader className="border-b border-border/40 bg-background/55 dark:bg-white/[0.035] backdrop-blur-xl px-5 py-4 text-left">
           <DialogTitle className="flex items-center gap-2 text-base font-black">
             <RotateCcw className="h-5 w-5 text-primary" />

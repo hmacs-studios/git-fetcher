@@ -12,7 +12,7 @@ import { fetchSubjects } from "@/utils/mcqData";
 import { fetchCloudContent } from "@/utils/cloudContent";
 import { CollaborateModal } from "@/components/CollaborateModal";
 import { supabase } from "@/integrations/supabase/client";
-import bookAnimationData from '../../public/animations/Book.json';
+import bookAnimationData from '@/assets/animations/Book.json';
 import { LottiePlayer } from "@/components/LottiePlayer";
 import { Badge } from "@/components/ui/badge";
 

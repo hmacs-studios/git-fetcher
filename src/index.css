@@ -953,3 +953,8 @@ body,
     radial-gradient(ellipse at 100% 28%, hsl(199 89% 48% / 0.08), transparent 34%),
     linear-gradient(145deg, hsl(var(--background)) 0%, hsl(190 70% 18% / 0.26) 48%, hsl(var(--background)) 100%);
 }
+
+.font-rounded {
+  font-family: 'Quicksand', 'Fredoka', 'Sora', system-ui, sans-serif !important;
+}
+

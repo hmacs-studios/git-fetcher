@@ -192,23 +192,45 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
       <AnimatePresence>
         {!isHidden && (
           <motion.div
-            className="fixed bottom-6 right-4 z-50"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
+            className="fixed bottom-6 right-4 z-50 flex items-center justify-center"
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
             initial={{ opacity: 0, scale: 0.5, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.5, y: 20 }}
           >
-            <Button
-              onClick={onOpen}
-              className="w-14 h-14 rounded-full bg-primary/80 backdrop-blur-xl hover:bg-primary/90 shadow-xl border border-primary-foreground/10 p-0"
-            >
-              <img
-                src="/lovable-uploads/Mascot-mini.png"
-                alt="Dr. Ahroid"
-                className="w-full h-full object-contain rounded-full"
+            {/* Periodic 12-second pulse glow when question hasn't been attempted */}
+            {!currentAnswer && (
+              <motion.div
+                className="absolute -inset-2.5 rounded-full bg-primary/50 blur-md pointer-events-none"
+                animate={{
+                  scale: [1, 1.45, 1],
+                  opacity: [0, 0.9, 0],
+                }}
+                transition={{
+                  duration: 1.5,
+                  repeat: Infinity,
+                  repeatDelay: 10.5,
+                  ease: 'easeInOut',
+                }}
               />
-            </Button>
+            )}
+
+            {/* External circle wrapper with prominent shadow & gradient border */}
+            <div className="relative p-1 rounded-full bg-gradient-to-br from-primary via-blue-500 to-indigo-600 shadow-2xl shadow-primary/50 border-2 border-white/60 dark:border-zinc-800">
+              <Button
+                type="button"
+                onClick={onOpen}
+                className="w-14 h-14 rounded-full bg-background p-1.5 shadow-inner ring-2 ring-primary/40 hover:ring-primary hover:bg-primary/5 transition-all flex items-center justify-center cursor-pointer"
+                aria-label="Ask Dr. Ahroid"
+              >
+                <img
+                  src="/lovable-uploads/Mascot-mini.png"
+                  alt="Dr. Ahroid"
+                  className="w-full h-full object-contain rounded-full drop-shadow-sm"
+                />
+              </Button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

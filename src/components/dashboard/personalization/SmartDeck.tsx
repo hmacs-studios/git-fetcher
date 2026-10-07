@@ -12,26 +12,23 @@ import { buildFallbackCards, refineFlashcardsWithAI } from './personalizationUti
 import { Flashcard, MistakeChapter } from './types';
 import { parseBoldText } from '@/utils/format';
 import { useNavigate } from 'react-router-dom';
+import { InteractiveFlashcard } from './InteractiveFlashcard';
+
+import { LottiePlayer } from '@/components/LottiePlayer';
+import bouncingDotsAnimationData from '@/assets/animations/bouncing-dots-loading.json';
 
 type SmartDeckProps = {
   weakestChapter: MistakeChapter | null;
 };
 
-const FlashcardSkeleton = () => (
-  <div className="space-y-3 rounded-3xl border border-border/40 bg-background/55 dark:bg-white/[0.035] backdrop-blur-xl p-4">
-    <div className="flex items-center justify-between">
-      <div className="h-5 w-16 animate-pulse rounded-full bg-muted" />
-      <div className="h-3 w-24 animate-pulse rounded-full bg-muted" />
+const FlashcardLottieLoader = () => (
+  <div className="flex flex-col items-center justify-center py-12 space-y-3">
+    <div className="w-24 h-24 flex items-center justify-center">
+      <LottiePlayer animationData={bouncingDotsAnimationData} loop autoplay style={{ width: '100%', height: '100%' }} />
     </div>
-    <div className="space-y-2">
-      <div className="h-4 w-full animate-pulse rounded bg-muted" />
-      <div className="h-4 w-10/12 animate-pulse rounded bg-muted" />
-      <div className="h-4 w-7/12 animate-pulse rounded bg-muted" />
-    </div>
-    <div className="rounded-2xl bg-muted/50 p-3">
-      <div className="h-3 w-full animate-pulse rounded bg-muted-foreground/20" />
-      <div className="mt-2 h-3 w-9/12 animate-pulse rounded bg-muted-foreground/20" />
-    </div>
+    <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground animate-pulse">
+      Generating AI Flashcards…
+    </p>
   </div>
 );
 
@@ -85,7 +82,7 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
   };
 
   const currentCard = flashcards[activeCard];
-  const completedCards = flashcards.length > 0 && activeCard >= flashcards.length - 1;
+  const isAllCardsCompleted = flashcards.length > 0 && activeCard >= flashcards.length;
 
   return (
     <>
@@ -133,67 +130,78 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
       </Card>
 
       <Dialog open={flashcardModalOpen} onOpenChange={setFlashcardModalOpen}>
-        <DialogContent className="max-w-2xl overflow-hidden rounded-3xl border-border/40 p-0">
-          <DialogHeader className="border-b border-border/40 bg-background/55 dark:bg-white/[0.035] backdrop-blur-xl px-5 py-4 text-left">
-            <DialogTitle className="flex items-center gap-2 text-base font-black">
-              <BookOpen className="h-5 w-5 text-primary" />
-              {weakestChapter?.name}
-            </DialogTitle>
-            <DialogDescription>
-              Batch {batchIndex + 1} - {flashcards.length || 5} flashcards for this chapter.
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-md p-0 border-none bg-transparent shadow-none [&>button]:hidden flex flex-col items-center justify-center">
+          <DialogTitle className="sr-only">
+            {weakestChapter?.name || 'Flashcard Batch'}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Interactive AI flashcards batch
+          </DialogDescription>
 
-          <div className="p-4">
-            {cardsLoading ? (
-              <FlashcardSkeleton />
-            ) : currentCard ? (
-              <div className="space-y-3">
-                <div className="rounded-3xl border border-border/40 bg-background/55 dark:bg-white/[0.035] backdrop-blur-xl p-4 shadow-sm">
-                  <div className="mb-3 flex items-center justify-between">
-                    <Badge variant="secondary">{activeCard + 1}/{flashcards.length}</Badge>
-                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                      <Sparkles className="h-3 w-3" />
-                      {currentCard.source}
-                    </span>
-                  </div>
-                  <p className="text-sm font-black text-foreground">{currentCard.front}</p>
-                  <div className="mt-4 rounded-2xl bg-muted/60 p-3">
-                    <p className="text-xs leading-relaxed text-muted-foreground">{parseBoldText(currentCard.back)}</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="rounded-xl" disabled={activeCard === 0} onClick={() => setActiveCard(index => Math.max(0, index - 1))}>
-                    <ChevronLeft className="mr-1 h-4 w-4" />
-                    Previous
-                  </Button>
-                  <Button className="rounded-xl" disabled={completedCards} onClick={() => setActiveCard(index => Math.min(flashcards.length - 1, index + 1))}>
-                    Next
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </div>
-
-                {completedCards && (
-                  <div className="grid grid-cols-1 gap-2">
-                    <Button className="rounded-xl" onClick={() => loadFlashcards(true)} disabled={cardsLoading}>
-                      {cardsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                      Load Next Batch
-                    </Button>
-                    <Button variant="outline" className="rounded-xl" onClick={startCorrectionSession}>
-                      <RotateCcw className="mr-2 h-4 w-4" />
-                      Continue Correcting MCQs
-                    </Button>
-                  </div>
-                )}
+          {cardsLoading ? (
+            <FlashcardLottieLoader />
+          ) : isAllCardsCompleted ? (
+            <div className="relative w-full max-w-md mx-auto aspect-[3/4.2] max-h-[520px] rounded-[2.5rem] p-6 flex flex-col justify-between bg-gradient-to-br from-indigo-900/60 via-purple-900/60 to-pink-900/60 backdrop-blur-2xl text-white shadow-2xl font-rounded border border-white/20 select-none">
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary" className="bg-white/15 text-white font-rounded font-bold border-white/20 backdrop-blur-md">
+                  Batch Completed 🎉
+                </Badge>
+                <button
+                  type="button"
+                  onClick={() => setFlashcardModalOpen(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 border border-white/20 hover:bg-white/20 transition"
+                >
+                  <span className="text-sm font-bold">×</span>
+                </button>
               </div>
-            ) : (
-              <Button className="h-12 w-full rounded-2xl font-black" onClick={() => loadFlashcards(false)}>
-                <Wand2 className="mr-2 h-4 w-4" />
-                Build Flashcards
-              </Button>
-            )}
-          </div>
+
+              <div className="my-auto text-center space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-white/15 backdrop-blur-xl border border-white/30 text-white shadow-2xl">
+                  <Sparkles className="h-8 w-8 text-amber-300" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-bold font-rounded">Batch {batchIndex + 1} Finished!</h3>
+                  <p className="text-xs text-purple-200/90 font-medium">You've completed all {flashcards.length} revision cards in this set.</p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5 pt-2 border-t border-white/15">
+                <Button className="w-full h-12 rounded-2xl font-black bg-white text-purple-950 hover:bg-purple-50 shadow-lg text-sm" onClick={() => loadFlashcards(true)} disabled={cardsLoading}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Load Next Batch
+                </Button>
+                <Button variant="secondary" className="w-full h-12 rounded-2xl font-bold bg-white/15 text-white hover:bg-white/25 backdrop-blur-md border border-white/20 text-sm" onClick={startCorrectionSession}>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Continue Correcting MCQs
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setActiveCard(0)}
+                  className="w-full text-center text-xs font-bold text-purple-200 hover:text-white py-1 underline underline-offset-4"
+                >
+                  Replay batch from Card 1
+                </button>
+              </div>
+            </div>
+          ) : currentCard ? (
+            <div className="w-full space-y-3">
+              <InteractiveFlashcard
+                card={currentCard}
+                currentIndex={activeCard}
+                totalCards={flashcards.length}
+                chapterName={weakestChapter?.name}
+                batchIndex={batchIndex}
+                onClose={() => setFlashcardModalOpen(false)}
+                onSwipeNext={() => setActiveCard((index) => index + 1)}
+                onSwipePrev={() => setActiveCard((index) => Math.max(0, index - 1))}
+              />
+            </div>
+          ) : (
+            <Button className="h-12 w-full rounded-2xl font-black" onClick={() => loadFlashcards(false)}>
+              <Wand2 className="mr-2 h-4 w-4" />
+              Build Flashcards
+            </Button>
+          )}
         </DialogContent>
       </Dialog>
 

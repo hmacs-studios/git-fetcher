@@ -11,8 +11,12 @@ import {
 import {
   cacheChapterMCQs,
   cacheChapters,
+  clearCachedMCQData,
+  clearCachedMCQDataSync,
   getCachedChapterMCQs,
+  getStoredScopeKey,
   readCachedChapters,
+  setStoredScopeKey,
 } from '@/utils/mcqContentCache';
 import { logMCQDiagnostic } from '@/utils/mcqDiagnostics';
 
@@ -112,18 +116,42 @@ const hasExplicitProfileYear = async (): Promise<boolean> => {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('year')
+    .select('year, institute')
     .eq('id', authData.user.id)
     .maybeSingle();
 
   if (profileError) return false;
+  
+  if (profile?.institute === 'nre' || profile?.institute === 'nle') return true;
+
   return String(profile?.year || '').trim().length > 0;
+};
+
+const getCurrentProfileScopeTag = async (): Promise<string | null> => {
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError || !authData.user) return null;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('institute, year')
+      .eq('id', authData.user.id)
+      .maybeSingle();
+
+    const institute = String(profile?.institute || '').trim().toLowerCase();
+    const year = String(profile?.year || '').trim().toLowerCase();
+    return `${authData.user.id}:${institute}:${year}`;
+  } catch {
+    return null;
+  }
 };
 
 export const readCachedSubjects = (): Subject[] => {
   if (typeof window === 'undefined') return [];
   try {
-    const cached = localStorage.getItem(SUBJECTS_CACHE_KEY);
+    const activeScope = getStoredScopeKey();
+    const key = activeScope ? `medmacs_mcq_subjects_cache:${activeScope}` : 'medmacs_mcq_subjects_cache';
+    const cached = localStorage.getItem(key);
     const parsed = cached ? JSON.parse(cached) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -131,10 +159,16 @@ export const readCachedSubjects = (): Subject[] => {
   }
 };
 
-const cacheSubjects = (subjects: Subject[]) => {
+const cacheSubjects = async (subjects: Subject[]) => {
   if (typeof window === 'undefined' || subjects.length === 0) return;
   try {
-    localStorage.setItem(SUBJECTS_CACHE_KEY, JSON.stringify(subjects));
+    const activeScope = await getCurrentProfileScopeTag();
+    if (activeScope) {
+      setStoredScopeKey(activeScope);
+      localStorage.setItem(`medmacs_mcq_subjects_cache:${activeScope}`, JSON.stringify(subjects));
+    } else {
+      localStorage.setItem('medmacs_mcq_subjects_cache', JSON.stringify(subjects));
+    }
   } catch {
     // Storage can be unavailable or full; subjects can still be used in memory.
   }
@@ -175,17 +209,33 @@ const applySubjectFreeUnlimitedFlags = async (subjects: Subject[]) => {
 
 export const fetchSubjects = async (): Promise<Subject[]> => {
   if (!(await hasExplicitProfileYear())) {
-    if (typeof window !== 'undefined') localStorage.removeItem(SUBJECTS_CACHE_KEY);
+    clearCachedMCQDataSync();
     return [];
   }
 
+  // Verify cached scope matches current profile (user_id:institute:year)
+  const currentScopeTag = await getCurrentProfileScopeTag();
+  const storedScopeTag = getStoredScopeKey();
+
+  if (storedScopeTag && currentScopeTag && storedScopeTag !== currentScopeTag) {
+    console.log('[fetchSubjects] Scope changed. Clearing old institute/year caches immediately.');
+    clearCachedMCQDataSync();
+    void clearCachedMCQData();
+  }
+
+  if (currentScopeTag) {
+    setStoredScopeKey(currentScopeTag);
+  }
+
+  const isScopeMatch = !storedScopeTag || !currentScopeTag || storedScopeTag === currentScopeTag;
   const cachedSubjects = readCachedSubjects();
-  if (cachedSubjects.length > 0) {
+
+  if (cachedSubjects.length > 0 && isScopeMatch) {
     if (shouldRefreshInBackground('subjects')) {
       void fetchCloudContent<Subject[]>('mcq-subjects')
         .then(async subjects => {
           if (!subjects?.length) return;
-          cacheSubjects(await applySubjectFreeUnlimitedFlags(subjects));
+          await cacheSubjects(await applySubjectFreeUnlimitedFlags(subjects));
         })
         .catch(() => undefined);
     }
@@ -200,12 +250,12 @@ export const fetchSubjects = async (): Promise<Subject[]> => {
   ]);
 
   const availableSubjects = mergeById(
-    cloudResult.data?.length ? cloudResult.data : cachedSubjects,
+    cloudResult.data?.length ? cloudResult.data : (isScopeMatch ? cachedSubjects : []),
     offlineSubjects as Subject[],
   );
   if (cloudResult.error && availableSubjects.length === 0) throw cloudResult.error;
   const subjects = await applySubjectFreeUnlimitedFlags(availableSubjects);
-  cacheSubjects(subjects);
+  await cacheSubjects(subjects);
   return subjects;
 };
 
@@ -255,12 +305,13 @@ export const fetchSubjectById = async (subjectId: string): Promise<Subject | nul
 export const fetchChaptersBySubject = async (subjectId: string): Promise<Chapter[]> => {
   if (!(await hasExplicitProfileYear())) return [];
 
-  const cachedChapters = readCachedChapters(subjectId);
+  const scopeKey = getStoredScopeKey();
+  const cachedChapters = readCachedChapters(subjectId, scopeKey);
   if (cachedChapters.length > 0) {
-    if (shouldRefreshInBackground(`chapters:${subjectId}`)) {
+    if (shouldRefreshInBackground(`chapters:${subjectId}:${scopeKey}`)) {
       void fetchCloudContent<Chapter[]>('mcq-chapters', { subjectId })
         .then(chapters => {
-          if (chapters?.length) cacheChapters(subjectId, chapters);
+          if (chapters?.length) cacheChapters(subjectId, chapters, scopeKey);
         })
         .catch(() => undefined);
     }
@@ -277,7 +328,7 @@ export const fetchChaptersBySubject = async (subjectId: string): Promise<Chapter
   if (cloudResult.error && offlineChapters.length === 0) throw cloudResult.error;
   const chapters = mergeById(cloudResult.data ?? [], offlineChapters as Chapter[])
     .sort((a, b) => a.chapter_number - b.chapter_number);
-  cacheChapters(subjectId, chapters);
+  cacheChapters(subjectId, chapters, scopeKey);
   return chapters;
 };
 
@@ -285,7 +336,8 @@ export const fetchChapterById = async (chapterId: string, subjectId?: string): P
   if (!(await hasExplicitProfileYear())) return null;
 
   if (subjectId) {
-    const cachedChapter = readCachedChapters(subjectId).find(chapter => chapter.id === chapterId);
+    const scopeKey = getStoredScopeKey();
+    const cachedChapter = readCachedChapters(subjectId, scopeKey).find(chapter => chapter.id === chapterId);
     if (cachedChapter) return cachedChapter;
   }
 
@@ -484,6 +536,38 @@ export const getUserStats = async (userId: string) => {
     return { totalQuestions, correctAnswers, accuracy, averageTime, bestStreak, savedQuestions: currentStreak };
   } catch {
     return { totalQuestions: 0, correctAnswers: 0, accuracy: 0, averageTime: 0, bestStreak: 0, savedQuestions: 0 };
+  }
+};
+
+export const getAttemptedChapterIds = async (userId: string): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('user_answers')
+      .select('mcqs(chapter_id)')
+      .eq('user_id', userId);
+
+    if (error || !data) return [];
+    const chapterIds = data
+      .map((row: any) => row.mcqs?.[0]?.chapter_id)
+      .filter(Boolean);
+    return Array.from(new Set(chapterIds));
+  } catch {
+    return [];
+  }
+};
+
+export const getChapterAnswerCount = async (userId: string, chapterId: string): Promise<number> => {
+  try {
+    const { data, error } = await supabase
+      .from('user_answers')
+      .select('mcq_id, mcqs(chapter_id)')
+      .eq('user_id', userId);
+
+    if (error || !data) return 0;
+    const count = data.filter((row: any) => row.mcqs?.[0]?.chapter_id === chapterId).length;
+    return count;
+  } catch {
+    return 0;
   }
 };
 

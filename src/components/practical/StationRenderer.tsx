@@ -58,11 +58,11 @@ export const StationRenderer: React.FC<StationRendererProps> = ({ station }) => 
       <div className="space-y-4 px-2">
         <div className="flex flex-wrap items-center gap-2">
           {station.tag && (
-            <Badge variant="secondary" className="bg-primary/20 text-primary-foreground border-primary/20 backdrop-blur-md px-4 py-1.5 rounded-full font-bold uppercase tracking-wider text-[10px]">
+            <Badge className="bg-primary/10 text-primary border border-primary/20 px-3.5 py-1 rounded-full font-bold uppercase tracking-wider text-[11px] shadow-sm">
               {station.tag}
             </Badge>
           )}
-          <Badge variant="outline" className="border-cyan-500/30 text-cyan-400 backdrop-blur-md px-4 py-1.5 rounded-full font-bold text-[10px]">
+          <Badge className="bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 px-3.5 py-1 rounded-full font-bold text-[11px] uppercase tracking-wider shadow-sm">
             OSCE STATION
           </Badge>
         </div>

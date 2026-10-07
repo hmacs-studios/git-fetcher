@@ -7,7 +7,6 @@ type CachedMCQChapter = {
   cachedAt: string;
 };
 
-const CHAPTERS_CACHE_PREFIX = 'medmacs_mcq_chapters_cache:';
 const DB_NAME = 'medmacs-mcq-content-cache';
 const DB_VERSION = 1;
 const MCQ_STORE = 'chapter-mcqs';
@@ -75,10 +74,44 @@ const transactionDone = (transaction: IDBTransaction) =>
     transaction.onabort = () => reject(transaction.error);
   });
 
-export const readCachedChapters = (subjectId: string): Chapter[] => {
+const ACTIVE_SCOPE_KEY = 'medmacs_mcq_active_scope';
+const SUBJECTS_CACHE_PREFIX = 'medmacs_mcq_subjects_cache:';
+const CHAPTERS_CACHE_PREFIX = 'medmacs_mcq_chapters_cache:';
+
+export const getStoredScopeKey = (): string => {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(ACTIVE_SCOPE_KEY) || '';
+};
+
+export const setStoredScopeKey = (scopeKey: string) => {
+  if (typeof window === 'undefined') return;
+  if (scopeKey) localStorage.setItem(ACTIVE_SCOPE_KEY, scopeKey);
+  else localStorage.removeItem(ACTIVE_SCOPE_KEY);
+};
+
+export const clearCachedMCQDataSync = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith(SUBJECTS_CACHE_PREFIX) || key.startsWith(CHAPTERS_CACHE_PREFIX) || key === 'medmacs_mcq_subjects_cache' || key === ACTIVE_SCOPE_KEY || key === 'medmacs_mcq_profile_scope')) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(k => localStorage.removeItem(k));
+  } catch (err) {
+    console.error('Failed to synchronously invalidate MCQ localStorage cache:', err);
+  }
+};
+
+export const readCachedChapters = (subjectId: string, scopeKey = ''): Chapter[] => {
   if (typeof window === 'undefined') return [];
   try {
-    const value = localStorage.getItem(`${CHAPTERS_CACHE_PREFIX}${subjectId}`);
+    const key = scopeKey
+      ? `${CHAPTERS_CACHE_PREFIX}${scopeKey}:${subjectId}`
+      : `${CHAPTERS_CACHE_PREFIX}${subjectId}`;
+    const value = localStorage.getItem(key);
     const parsed = value ? JSON.parse(value) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -86,10 +119,13 @@ export const readCachedChapters = (subjectId: string): Chapter[] => {
   }
 };
 
-export const cacheChapters = (subjectId: string, chapters: Chapter[]) => {
+export const cacheChapters = (subjectId: string, chapters: Chapter[], scopeKey = '') => {
   if (typeof window === 'undefined' || chapters.length === 0) return;
   try {
-    localStorage.setItem(`${CHAPTERS_CACHE_PREFIX}${subjectId}`, JSON.stringify(chapters));
+    const key = scopeKey
+      ? `${CHAPTERS_CACHE_PREFIX}${scopeKey}:${subjectId}`
+      : `${CHAPTERS_CACHE_PREFIX}${subjectId}`;
+    localStorage.setItem(key, JSON.stringify(chapters));
   } catch {
     // Navigation can continue when storage is unavailable or full.
   }
@@ -130,18 +166,8 @@ export const cacheChapterMCQs = async (chapterId: string, mcqs: MCQ[]) => {
 
 export const clearCachedMCQData = async () => {
   if (typeof window === 'undefined') return;
+  clearCachedMCQDataSync();
   try {
-    // Clear localStorage subject cache and all subject chapter caches
-    localStorage.removeItem('medmacs_mcq_subjects_cache');
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(CHAPTERS_CACHE_PREFIX)) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(k => localStorage.removeItem(k));
-
     // Clear IndexedDB MCQ content store
     try {
       const db = await openDb();

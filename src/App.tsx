@@ -21,6 +21,7 @@ import OtaUpdateScreen from '@/components/OtaUpdateScreen';
 import OtaDiagnosticsPanel from '@/components/OtaDiagnosticsPanel';
 import DeviceActivityTracker from '@/components/auth/DeviceActivityTracker';
 import UpgradeAccountModal from '@/components/UpgradeAccountModal';
+import FeatureGate from '@/components/auth/FeatureGate';
 import { setOnAiLimitError, type AiApiError } from '@/utils/aiApi';
 
 type InstallStatePluginApi = {
@@ -263,16 +264,16 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/mcqs" element={<MCQSubjectSelectionPage />} />
-                <Route path="/mcqs/chapter/:subjectId" element={<MCQChapterSelectionPage />} />
-                <Route path="/mcqs/settings/:subjectId/:chapterId" element={<MCQSettingsPage />} />
-                <Route path="/mcqs/quiz/:subjectId/:chapterId" element={<MCQQuizPage />} />
+                <Route path="/mcqs" element={<FeatureGate feature="mcqs"><MCQSubjectSelectionPage /></FeatureGate>} />
+                <Route path="/mcqs/chapter/:subjectId" element={<FeatureGate feature="mcqs"><MCQChapterSelectionPage /></FeatureGate>} />
+                <Route path="/mcqs/settings/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><MCQSettingsPage /></FeatureGate>} />
+                <Route path="/mcqs/quiz/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><MCQQuizPage /></FeatureGate>} />
                 <Route path="/medmacs-supers/chapter-locks" element={<ChapterLocks />} />
                 <Route path="/medmacs-supers/updates" element={<OtaUpdates />} />
-                <Route path="/battle" element={<Battle />} />
-                <Route path="/ai" element={<AI />} />
-                <Route path="/ai/test-generator" element={<AITestGeneratorPage />} />
-                <Route path="/ai/chatbot" element={<AIChatbotPage />} />
+                <Route path="/battle" element={<FeatureGate feature="battle_mode"><Battle /></FeatureGate>} />
+                <Route path="/ai" element={<FeatureGate feature="ai_tutor"><AI /></FeatureGate>} />
+                <Route path="/ai/test-generator" element={<FeatureGate feature="ai_test_attempt"><AITestGeneratorPage /></FeatureGate>} />
+                <Route path="/ai/chatbot" element={<FeatureGate feature="ai_tutor"><AIChatbotPage /></FeatureGate>} />
                 <Route path="/leaderboard" element={<Leaderboard />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/devices" element={<Devices />} />
@@ -284,7 +285,7 @@ function App() {
                 <Route path="/refund-policy" element={<RefundPolicy />} />
                 <Route path="/dcma" element={<DMCAPolicy />} />
                 <Route path="/dmca" element={<DMCAPolicy />} />
-                <Route path="/mock-test" element={<MockTest />} />
+                <Route path="/mock-test" element={<FeatureGate feature="ai_test_attempt"><MockTest /></FeatureGate>} />
                 <Route path="/test-completed" element={<TestCompletionPage />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/terms" element={<TermsAndConditions />} />
@@ -297,27 +298,27 @@ function App() {
                 <Route path="/career" element={<Career />} />
                 <Route path="/teaching-career" element={<TeachingAmbassadors />} />
                 <Route path="/summerinternship2025" element={<InternshipApplication />} />
-                <Route path="/saved-mcqs" element={<SavedMCQsPage />} />
-                <Route path="/mistake-book" element={<MistakeBookPage />} />
-                <Route path="/smart-deck" element={<SmartDeckPage />} />
+                <Route path="/saved-mcqs" element={<FeatureGate feature="saved_questions"><SavedMCQsPage /></FeatureGate>} />
+                <Route path="/mistake-book" element={<FeatureGate feature="mistake_book"><MistakeBookPage /></FeatureGate>} />
+                <Route path="/smart-deck" element={<FeatureGate feature="flashcards"><SmartDeckPage /></FeatureGate>} />
                 <Route path="/revision-queue" element={<Navigate to="/smart-deck" replace />} />
                 <Route path="/titration" element={<Navigate to="/smart-deck" replace />} />
-                <Route path="/learn-with-ai" element={<LearnWithAIPage />} />
+                <Route path="/learn-with-ai" element={<FeatureGate feature="ai_tutor"><LearnWithAIPage /></FeatureGate>} />
                 <Route path="/announcements" element={<Announcements />} />
                 <Route path="/contact-us" element={<ContactUsPage />} />
-                <Route path="/flp" element={<FLP />} />
-                <Route path="/flp/test" element={<FLPTestPage />} />
-                <Route path="/flp-result" element={<FLPResults />} />
-                <Route path="/results/flp/:id" element={<FLPResultDetail />} />
+                <Route path="/flp" element={<FeatureGate feature="flps"><FLP /></FeatureGate>} />
+                <Route path="/flp/test" element={<FeatureGate feature="flps"><FLPTestPage /></FeatureGate>} />
+                <Route path="/flp-result" element={<FeatureGate feature="flps"><FLPResults /></FeatureGate>} />
+                <Route path="/results/flp/:id" element={<FeatureGate feature="flps"><FLPResultDetail /></FeatureGate>} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/update-password" element={<UpdatePassword />} />
                 <Route path="/select-year" element={<SelectYear />} />
                 <Route path="/teams" element={<Teams />} />
                 <Route path="/install-app" element={<InstallApp />} />
-                <Route path="/practicals" element={<PracticalPage />} />
-                <Route path="/seqs" element={<SEQSubjectSelectionPage />} />
-                <Route path="/seqs/chapter/:subjectId" element={<SEQChapterSelectionPage />} />
-                <Route path="/seqs/quiz/:subjectId/:chapterId" element={<SEQQuizPage />} />
+                <Route path="/practicals" element={<FeatureGate feature="ospe"><PracticalPage /></FeatureGate>} />
+                <Route path="/seqs" element={<FeatureGate feature="seqs"><SEQSubjectSelectionPage /></FeatureGate>} />
+                <Route path="/seqs/chapter/:subjectId" element={<FeatureGate feature="seqs"><SEQChapterSelectionPage /></FeatureGate>} />
+                <Route path="/seqs/quiz/:subjectId/:chapterId" element={<FeatureGate feature="seqs"><SEQQuizPage /></FeatureGate>} />
                 <Route path="/redeem" element={<RedeemCode />} />
                 <Route path="/referrals" element={<Referrals />} />
                 <Route path="/purchase-history" element={<PurchaseHistory />} />

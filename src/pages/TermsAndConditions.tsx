@@ -68,7 +68,7 @@ For the purposes of these Terms and Conditions:
 
 ## Cookies
 
-We employ the use of cookies. By accessing Medmacs.app, you agreed to use cookies in agreement with the Medmacs.app's Privacy Policy.
+We employ the use of cookies and automated tracking technologies. By accessing or using Medmacs.app, you automatically agree to the execution of automated analytics, user activity tracking, campaign measurement scripts, and telemetry data collection as outlined in our Privacy Policy.
 
 ---
 

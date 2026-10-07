@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { aiApiJson } from '@/utils/aiApi';
 import { isAiLimitError } from '@/components/dashboard/personalization/FlashcardLimitModal';
 import { LottiePlayer } from '@/components/LottiePlayer';
-import openerLoadingAnimationData from '../../public/animations/Opener Loading.json';
+import openerLoadingAnimationData from '@/assets/animations/Opener Loading.json';
 import { fetchSubjects, fetchChaptersBySubject, Subject, Chapter } from '@/utils/mcqData';
 
 interface Question {

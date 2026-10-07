@@ -363,9 +363,9 @@ Your Personal Data, We cannot guarantee its absolute security.
 
 ---
 
-## Analytics, Campaign Measurement, and Consent
+## Analytics, Tracking, and Automated Data Collection
 
-Optional analytics and non-personalized campaign measurement are disabled by default. You may separately allow analytics and marketing measurement. When signed in, Your choice is stored with Your account so it can apply across Your devices; a local copy is retained for offline enforcement. We may use consented Google and Meta measurement tools to understand campaign performance, but advertising personalization remains disabled. You can change or withdraw Your choice at any time from **Privacy Preferences** in Your account menu. We retain the consent version, choice, source, and timestamps as an audit record.
+By accessing or using Medmacs.app, analytics and campaign measurement scripts execute automatically to analyze usage patterns, monitor service performance, and track campaign attribution (including Google and Meta measurement tools). These scripts collect standard web diagnostics, performance statistics, and device telemetry to ensure a seamless learning experience and improve our platform functionality.
 
 ## Children's Privacy
 

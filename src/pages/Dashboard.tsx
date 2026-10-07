@@ -275,7 +275,8 @@ const Dashboard = () => {
   const quickActions = useMemo(getQuickActions, []);
   const personalizationActions = useMemo(getPersonalizationActions, []);
   const premiumPerks = useMemo(getPremiumActions, []);
-  const instituteModules = getInstituteActions(dashboardComponents);
+  const isSpecializedTest = isSpecializedTestCode(profile?.institute);
+  const instituteModules = getInstituteActions(dashboardComponents, isSpecializedTest);
 
   const displayName = profile?.full_name || profile?.username || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Medmacs User';
   const greetingMessage = useMemo(
@@ -441,7 +442,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background pb-28 dark:from-primary/15 dark:via-background dark:to-background" style={{ WebkitOverflowScrolling: 'touch' }}>
+    <div className="dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background pb-28 dark:from-background dark:via-background dark:to-background" style={{ WebkitOverflowScrolling: 'touch' }}>
       <Seo title="Dashboard" description="Your personalized Medmacs App dashboard." canonical="https://medmacs.app/dashboard" />
       <VersionGuard />
 

@@ -1,0 +1,17 @@
+name = "dailygame-medmacs"
+main = "index.ts"
+compatibility_date = "2024-09-01"
+
+routes = [
+  { pattern = "dailygame.medmacs.app/*", zone_name = "medmacs.app" }
+]
+
+[vars]
+ENVIRONMENT = "production"
+PKT_OFFSET_HOURS = 5
+RESET_HOUR_PKT = 15
+
+[cors]
+allow_origins = ["https://medmacs.app", "https://app.medmacs.app", "http://localhost:5173", "*"]
+allow_methods = ["GET", "POST", "OPTIONS"]
+allow_headers = ["Content-Type", "Authorization"]

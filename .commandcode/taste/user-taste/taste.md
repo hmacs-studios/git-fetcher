@@ -1,0 +1,12 @@
+# User Taste
+- Prefers Roman Urdu for technical explanations alongside English. Confidence: 0.95
+- Uses informal register with "yaar", "duffer", and casual phrasing; pairs mild corrective nicknames with softening polite conditionals ("agr possible hai to" = "if possible, then"). Confidence: 0.92
+- Mixes Hindi/Urdu (Devanagari script) and Roman Urdu naturally; switches to Roman Urdu when requested. Confidence: 0.85
+- Works primarily over SSH to a remote cloud server (Ubuntu@161.118.227.79) with custom SSH keys. Confidence: 0.95
+- Debugs Docker containers by checking logs (`docker logs | tail/head`), inspecting container configuration (`docker inspect`), and exec'ing into running containers. Confidence: 0.9
+- Mounts volumes (`-v host:path:container`) to fix missing files inside containers rather than rebuilding images. Confidence: 0.85
+- Uses `--restart unless-stopped` for container persistence across reboots. Confidence: 0.8
+- Diagnoses by isolating the root cause: checks host filesystem, container mounts, container logs, and API endpoints in sequence. Confidence: 0.9
+- Saves startup scripts for future reproducibility after fixing container configurations. Confidence: 0.8
+- Verifies fixes end-to-end: checks container status, health endpoint, and functional search queries before declaring success. Confidence: 0.95
+- Prefers non-destructive corrections: when an operation (e.g., database deletion) goes wrong, asks to restore lost data rather than redo the entire workflow from scratch. Confidence: 0.85

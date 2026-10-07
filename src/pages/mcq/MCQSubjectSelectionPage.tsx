@@ -120,7 +120,7 @@ const MCQSubjectSelectionPage = () => {
     try {
       const data = await fetchSubjects();
       if (requestId !== subjectRequestRef.current) return;
-      setSubjects(current => data.length > 0 ? data : current);
+      setSubjects(data);
     } catch (error) {
       console.error('Unable to load MCQ subjects:', error);
       if (requestId === subjectRequestRef.current) setLoadError(true);

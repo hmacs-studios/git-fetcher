@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { clearCachedMCQDataSync, getStoredScopeKey, setStoredScopeKey } from '@/utils/mcqContentCache';
 
 const DEFAULT_CONTENT_API_URL = 'https://contents.medmacs.app/api/content';
 const CONTENT_API_URL = import.meta.env.VITE_CONTENT_API_URL || DEFAULT_CONTENT_API_URL;
@@ -93,7 +94,7 @@ export const fetchCloudContent = async <T>(
               headers: {
                 Authorization: `Bearer ${token}`,
               },
-              cache: 'no-store',
+              cache: 'default',
               signal: controller.signal,
             });
             console.log(`[fetchCloudContent] Response status for ${resource}: ${response.status}`);
@@ -115,6 +116,17 @@ export const fetchCloudContent = async <T>(
           console.error(`[fetchCloudContent] Response not OK (${response.status}): ${errText}`);
           throw new Error(`Content request failed (${response.status})`);
         }
+
+        const serverUserScope = response.headers.get('X-User-Scope');
+        if (serverUserScope) {
+          const storedScope = getStoredScopeKey();
+          if (storedScope && storedScope !== serverUserScope) {
+            console.log(`[fetchCloudContent] ETag Scope change detected (${storedScope} -> ${serverUserScope}). Invalidating all caches.`);
+            clearCachedMCQDataSync();
+          }
+          setStoredScopeKey(serverUserScope);
+        }
+
         const json = await response.json();
         const extracted = extractContentPayload<T>(json);
         console.log(`[fetchCloudContent] Extracted payload for ${resource}:`, { raw: json, extracted });

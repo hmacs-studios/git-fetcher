@@ -21,7 +21,7 @@ export interface ReferenceChunk {
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pxjvltgarzvoptdfdkxq.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_RVLZ7IetJ-w7raWeYGWa5A_5wV4g5rI';
 const OCI_SECRET_KEY = process.env.MEDMACS_OCI_SECRET_KEY || 'HMACS1396$';
-const getPrimaryUrl = () => process.env.REFERENCE_API_URL || 'https://auckland-cells-convenient-typically.trycloudflare.com/search';
+const getPrimaryUrl = () => process.env.REFERENCE_API_URL || 'https://reference-service.medmacs.app/search';
 const FALLBACK_REFERENCE_URL = 'http://161.118.227.79:8000/search';
 
 export const CLEAN_BOOK_MAPPINGS: Mapping[] = [
@@ -169,11 +169,18 @@ export const fetchReferenceChunks = async (query: string, topK = 5) => {
       try {
         const res = await executeSearchRequest(primaryUrl, query, topK);
         if (res.ok) return res;
-        console.warn(`Primary reference fetch status ${res.status}. Falling back...`);
+        console.warn(`Primary reference fetch status ${res.status}. Falling back to OCI...`);
       } catch (err) {
-        console.warn(`Primary reference fetch error:`, err, 'Falling back...');
+        console.warn(`Primary reference fetch error (tunnel may be down):`, err, 'Falling back to OCI...');
       }
-      return executeSearchRequest(FALLBACK_REFERENCE_URL, query, topK);
+      try {
+        const res = await executeSearchRequest(FALLBACK_REFERENCE_URL, query, topK);
+        if (res.ok) return res;
+        console.error(`Fallback reference fetch also failed with status ${res.status}.`);
+      } catch (err) {
+        console.error(`Fallback reference fetch error (OCI unreachable):`, err);
+      }
+      return null;
     })(),
     readBookReferenceMappings(),
   ]);
@@ -182,8 +189,13 @@ export const fetchReferenceChunks = async (query: string, topK = 5) => {
   const mappings = mappingsResult.status === 'fulfilled' ? mappingsResult.value : [];
 
   if (!refRes || !refRes.ok) {
-    const detail = refRes ? await refRes.text() : 'Network failure';
-    throw new Error(`Reference API error (${refRes?.status || 500}): ${detail}`);
+    // Ping uptime webhook if configured (used by external monitors like BetterUptime / UptimeRobot)
+    const webhookUrl = process.env.REFERENCE_DOWN_WEBHOOK;
+    if (webhookUrl) {
+      fetch(webhookUrl, { method: 'POST' }).catch(() => {});
+    }
+    const detail = refRes ? await refRes.text().catch(() => 'Unknown') : 'Both primary and fallback servers unreachable';
+    throw new Error(`Reference service is currently unavailable. Please try again later. (${refRes?.status || 'NETWORK_FAILURE'}: ${detail})`);
   }
 
   const data = await refRes.json();
@@ -195,3 +207,4 @@ export const fetchReferenceChunks = async (query: string, topK = 5) => {
     total_vectors: data.total_vectors,
   };
 };
+

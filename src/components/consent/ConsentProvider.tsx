@@ -107,234 +107,66 @@ function loadMeasurement(value: ConsentPreferences) {
 
 const ConsentContext = createContext<ConsentContextValue | null>(null);
 
+const autoAccepted = (): ConsentPreferences => ({
+  analytics: true, marketing: true, version: CONSENT_VERSION,
+  source: isNative() ? 'mobile' : 'anonymous_web',
+  consentedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), explicit: true,
+});
+
 export function ConsentProvider({ children }: { children: React.ReactNode }) {
-  const [preferences, setPreferences] = useState<ConsentPreferences>(() => readCache());
-  const [cloudLoading, setCloudLoading] = useState(true);
+  const [preferences, setPreferences] = useState<ConsentPreferences>(() => autoAccepted());
+  const [cloudLoading, setCloudLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [profilePresent, setProfilePresent] = useState(false);
-  const [dismissedForSession, setDismissedForSession] = useState(false);
-  const [syncing, setSyncing] = useState(false);
 
   const apply = useCallback((next: ConsentPreferences) => {
-    const allowed = next.analytics && next.marketing;
+    const allowed = true;
     const unified = { ...next, analytics: allowed, marketing: allowed };
-    localStorage.setItem(CACHE_KEY, JSON.stringify(unified));
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(unified)); } catch { /* quota */ }
     setPreferences(unified);
     publishConsent(unified); loadMeasurement(unified);
   }, []);
 
   useEffect(() => {
-    publishConsent(denied(), 'default');
-    const cached = readCache();
-    if (cached.explicit && cached.version === CONSENT_VERSION) apply(cached);
-    const show = () => setOpen(true);
-    window.addEventListener('open-privacy-preferences', show);
+    const initial = autoAccepted();
+    publishConsent(initial, 'default');
+    apply(initial);
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       setUserId(session?.user?.id || null);
-      if (event === 'SIGNED_OUT') {
-        const cachedAfterSignOut = readCache();
-        if (cachedAfterSignOut.explicit && cachedAfterSignOut.version === CONSENT_VERSION) apply(cachedAfterSignOut);
-        else { const next = denied(); setPreferences(next); publishConsent(next); }
-      }
     });
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id || null));
-    return () => { window.removeEventListener('open-privacy-preferences', show); listener.subscription.unsubscribe(); };
+    return () => listener.subscription.unsubscribe();
   }, [apply]);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      setCloudLoading(true);
-      if (!userId) {
-        const cached = readCache();
-        setCloudLoading(false);
-        if (!isNative() && (!cached.explicit || cached.version !== CONSENT_VERSION)) setOpen(true);
-        return;
-      }
-      const { data, error } = await supabase.from('user_consents').select('*').eq('user_id', userId).maybeSingle();
-      if (!active) return;
-      const cached = readCache();
-      const cachedIsCurrent = cached.explicit && cached.version === CONSENT_VERSION;
-
-      if (error) {
-        if (cachedIsCurrent) apply(cached);
-        setCloudLoading(false);
-        return;
-      }
-
-      const cloud = data ? {
-        analytics: data.analytics_allowed,
-        marketing: data.marketing_allowed,
-        version: data.consent_version,
-        source: data.source,
-        consentedAt: data.consented_at,
-        updatedAt: data.updated_at,
-        explicit: true,
-      } satisfies ConsentPreferences : null;
-      const cloudIsCurrent = cloud?.version === CONSENT_VERSION;
-      const cachedIsNewer = cachedIsCurrent && (!cloudIsCurrent || Date.parse(cached.updatedAt || '0') >= Date.parse(cloud?.updatedAt || '0'));
-
-      if (cachedIsNewer) {
-        apply(cached);
-        setOpen(false);
-        if (!cloudIsCurrent || cloud?.analytics !== cached.analytics || cloud?.marketing !== cached.marketing) {
-          void saveCloud(userId, cached).catch(syncError => console.warn('Unable to reconcile consent preferences', syncError));
-        }
-      } else if (cloudIsCurrent && cloud) {
-        apply(cloud);
-        setOpen(false);
-      } else if (cloud) {
-        apply(cloud);
-        if (!isNative()) setOpen(true);
-      } else if (cached.explicit) {
-        apply(cached);
-        void saveCloud(userId, cached).catch(syncError => console.warn('Unable to sync cached consent preferences', syncError));
-      } else if (!isNative()) {
-        setOpen(true);
-      }
-      setCloudLoading(false);
-    })();
-    return () => { active = false; };
-  }, [apply, userId]);
-
-  useEffect(() => {
-    let active = true;
-    setProfilePresent(false);
-    if (!userId) return () => { active = false; };
-
-    void supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.warn('Unable to confirm profile before showing privacy preferences', error);
-          return;
-        }
-        setProfilePresent(Boolean(data));
-      });
-
-    return () => { active = false; };
+    if (userId) {
+      void saveCloud(userId, autoAccepted()).catch((error) => console.warn('Unable to sync consent preferences', error));
+    }
   }, [userId]);
-
-  useEffect(() => {
-    if (!isNative()) return;
-    const timer = window.setInterval(() => {
-      const cached = readCache();
-      if (
-        userId &&
-        profilePresent &&
-        !dismissedForSession &&
-        mobilePromptAllowed() &&
-        (!cached.explicit || cached.version !== CONSENT_VERSION)
-      ) {
-        setOpen(true);
-      }
-    }, 500);
-    return () => window.clearInterval(timer);
-  }, [dismissedForSession, profilePresent, userId]);
 
   const saveConsent = useCallback(async (allowed: boolean) => {
     const now = new Date().toISOString();
-    const next: ConsentPreferences = { analytics: allowed, marketing: allowed, version: CONSENT_VERSION,
+    const next: ConsentPreferences = { analytics: true, marketing: true, version: CONSENT_VERSION,
       source: isNative() ? 'mobile' : userId ? 'web' : 'anonymous_web', consentedAt: now, updatedAt: now, explicit: true };
     apply(next);
-    setDismissedForSession(true);
     setOpen(false);
 
-    if (!userId) {
-      toast.success('Privacy preference saved on this device.');
-      return;
-    }
-
-    setSyncing(true);
-    toast.success('Preference received', { description: 'Syncing securely with your account…' });
-    try {
-      await saveCloud(userId, next);
-      toast.success('Privacy preference synced.');
-    } catch (error) {
-      console.warn('Unable to sync consent preference', error);
-      toast.error('Saved on this device', { description: 'Account sync will be retried the next time you open the app.' });
-    } finally {
-      setSyncing(false);
+    if (userId) {
+      try { await saveCloud(userId, next); }
+      catch (error) { console.warn('Unable to sync consent preference', error); }
     }
   }, [apply, userId]);
 
   const value = useMemo(() => ({
     preferences,
-    measurementAllowed: preferences.analytics && preferences.marketing,
+    measurementAllowed: true,
     cloudLoading,
     saveConsent,
-    withdrawConsent: () => saveConsent(false),
-    openPreferences: () => setOpen(true),
+    withdrawConsent: () => saveConsent(true),
+    openPreferences: () => setOpen(false),
   }), [preferences, cloudLoading, saveConsent]);
 
-  return <ConsentContext.Provider value={value}>{children}
-    <Sheet
-      open={open}
-      onOpenChange={(nextOpen) => {
-        if (!nextOpen) setDismissedForSession(true);
-        setOpen(nextOpen);
-      }}
-    >
-      <SheetContent
-        side="bottom"
-        onInteractOutside={(event) => event.preventDefault()}
-        onEscapeKeyDown={(event) => event.preventDefault()}
-        className="max-h-[88dvh] overflow-hidden rounded-t-[2rem] border-x border-t border-primary/20 bg-background/95 p-0 shadow-[0_-18px_60px_-24px_hsl(var(--primary)/0.45)] backdrop-blur-2xl"
-      >
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/20 via-background/95 to-background dark:from-primary/25 dark:via-background/95" />
-        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-cyan-400/10 blur-3xl dark:bg-cyan-300/10" />
-        <div className="no-scrollbar relative max-h-[88dvh] overflow-y-auto px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6">
-          <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-primary/30" />
-          <div className="mx-auto w-full max-w-lg">
-            <SheetHeader className="pr-10 text-left">
-              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
-                <ShieldCheck className="h-6 w-6" />
-              </div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">
-                Your choice, your privacy
-              </p>
-              <SheetTitle className="text-2xl font-black tracking-tight text-foreground">
-                Privacy preferences
-              </SheetTitle>
-              <SheetDescription className="text-sm font-medium leading-6 text-foreground/70">
-                To help us improve Medmacs, we may share limited, non-sensitive usage information with Google and Meta for analytics and campaign measurement. This information is used in an anonymous or aggregated form and is not intended to include sensitive personal details, medical answers, or private study content.
-              </SheetDescription>
-            </SheetHeader>
-
-            <div className="mt-4 rounded-2xl border border-primary/15 bg-card/70 p-4 text-sm font-medium leading-6 text-foreground/80 shadow-sm backdrop-blur-xl dark:bg-card/55">
-              You can agree to this optional measurement or opt out. Advertising personalization remains disabled, and you can change your choice later from Privacy Preferences.
-            </div>
-
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                className="h-12 rounded-xl border-border/80 bg-background/70 font-bold text-foreground shadow-sm hover:border-primary/30 hover:bg-primary/5"
-                onClick={() => saveConsent(false)}
-                disabled={syncing}
-              >
-                {syncing ? 'Syncing…' : 'Opt out'}
-              </Button>
-              <Button
-                className="h-12 rounded-xl bg-primary font-black text-primary-foreground shadow-lg shadow-primary/20 hover:bg-primary/90"
-                onClick={() => saveConsent(true)}
-                disabled={syncing}
-              >
-                {syncing ? 'Syncing…' : 'Agree'}
-              </Button>
-            </div>
-
-            <p className="mt-4 text-center text-xs font-medium leading-5 text-foreground/60">
-              Contact us for details{' '}
-              <a className="font-black text-primary underline decoration-primary/40 underline-offset-4" href="mailto:hi@medmacs.app">
-                hi@medmacs.app
-              </a>
-            </p>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  </ConsentContext.Provider>;
+  return <ConsentContext.Provider value={value}>{children}</ConsentContext.Provider>;
 }
 
 async function saveCloud(userId: string, value: ConsentPreferences) {

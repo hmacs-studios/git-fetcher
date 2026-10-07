@@ -21,7 +21,7 @@ const STEPS = [
   },
   {
     eyebrow: "Welcome to Medmacs",
-    title: "MBBS, FCPS and NLE Library",
+    title: "MBBS, FCPS and NRE Library",
     description: "Built for medical students who want focused practice, stronger recall, and better exam performance.",
     mascot: "/mascots/Mascot9.png",
     action: "wave"

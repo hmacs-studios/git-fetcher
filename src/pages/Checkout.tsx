@@ -1,7 +1,7 @@
 import LottiePlayer from '@/components/LottiePlayer';
-import paymentProcessingAnim from '../../public/animations/Bank.json';
-import paymentSuccessAnim from '../../public/animations/Payment Success.json';
-import paymentFailAnim from '../../public/animations/Close.json';
+import paymentProcessingAnim from '@/assets/animations/Bank.json';
+import paymentSuccessAnim from '@/assets/animations/Payment Success.json';
+import paymentFailAnim from '@/assets/animations/Close.json';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ import { paymentApi, type PaymentOrder, type PayFastSession } from '@/services/p
 import Seo from '@/components/Seo';
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Browser } from '@capacitor/browser';
 import { useConsent } from '@/components/consent/ConsentProvider';
 import { trackMetaAddPaymentInfo, trackMetaInitiatedCheckout, trackMetaPurchase } from '@/utils/metaAppEvents';
@@ -36,7 +35,6 @@ const Checkout = () => {
     const [paymentMethod, setPaymentMethod] = useState<'easypaisa' | 'payfast'>('easypaisa');
     const [mobileNumber, setMobileNumber] = useState('');
     const [modalState, setModalState] = useState<'idle' | 'processing' | 'success' | 'failure'>('idle');
-    const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [promoCode, setPromoCode] = useState('');
     const [promoCodeError, setPromoCodeError] = useState<string | null>(null);
     const [discountedPrice, setDiscountedPrice] = useState<number | null>(null);
@@ -272,7 +270,6 @@ const Checkout = () => {
     const processPayment = () => {
         if (isLoading || isRedirecting) return;
         if (!user) { setError("Please sign in to continue."); return; }
-        if (!agreedToTerms) { setError("You must agree to the Terms, Privacy, and Refund policies to continue."); return; }
         if (paymentMethod === 'easypaisa') {
             handleEasypaisaPayment();
         } else {
@@ -450,14 +447,13 @@ const Checkout = () => {
 
                     {/* Terms and Button */}
                     <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 100 } } }}>
-                        <div className="flex items-start space-x-3 p-3 mb-4 rounded-xl hover:bg-muted/50 transition-colors">
-                            <Checkbox id="terms" checked={agreedToTerms} onCheckedChange={(checked) => setAgreedToTerms(checked === true)} className="mt-1" />
-                            <label htmlFor="terms" className="text-xs leading-snug text-muted-foreground cursor-pointer">
+                        <div className="p-3 mb-4 rounded-xl hover:bg-muted/50 transition-colors">
+                            <p className="text-xs leading-snug text-muted-foreground">
                                 By continuing to pay to Medmacs/Hmacs Studios, you agree to our{' '}
                                 <Link to="/terms" className="text-primary hover:underline font-medium transition-colors">Terms and Conditions</Link>,{' '}
                                 <Link to="/privacypolicy" className="text-primary hover:underline font-medium transition-colors">Privacy Policy</Link>, and{' '}
                                 <Link to="/refund-policy" className="text-primary hover:underline font-medium transition-colors">Refund Policy</Link>.
-                            </label>
+                            </p>
                         </div>
 
                         {error && (
