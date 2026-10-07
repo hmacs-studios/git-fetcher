@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Bot, Sparkles, User, RefreshCw } from 'lucide-react';
-import { askAi, getPreferredAiProvider } from '@/utils/aiApi';
 
 interface DrAhroidModalProps {
   isOpen: boolean;
@@ -66,26 +65,21 @@ export const DrAhroidModal: React.FC<DrAhroidModalProps> = ({
       const promptContext = `You are Dr Ahroid, an elite medical board examiner and clinical professor. The user is asking about the medical case: "${reelTopic}". Category: "${reelCategory}". Clinical details: "${diagnosisText}". Answer their query concisely, accurately, with bulleted high-yield points and board examination pearls.\n\nUser Question: ${textToSend}`;
 
       let responseText = '';
-      try {
-        responseText = await askAi(promptContext);
-      } catch (err) {
-        // Fallback to direct Nemotron/NVIDIA API call if local wrapper hits limit
-        const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer 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',
-          },
-          body: JSON.stringify({
-            model: 'nvidia/nemotron-3-ultra-550b-a55b',
-            messages: [{ role: 'user', content: promptContext }],
-            temperature: 0.2,
-            max_tokens: 600,
-          }),
-        });
-        const data = await res.json();
-        responseText = data.choices?.[0]?.message?.content || 'Dr Ahroid is analyzing the case details. Please try asking again.';
-      }
+      const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer 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',
+        },
+        body: JSON.stringify({
+          model: 'nvidia/nemotron-3-ultra-550b-a55b',
+          messages: [{ role: 'user', content: promptContext }],
+          temperature: 0.2,
+          max_tokens: 600,
+        }),
+      });
+      const data = await res.json();
+      responseText = data.choices?.[0]?.message?.content || 'Dr Ahroid is analyzing the case details. Please try asking again.';
 
       const aiMsg: Message = {
         id: `ai-${Date.now()}`,
