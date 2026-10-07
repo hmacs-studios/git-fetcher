@@ -1,0 +1,13 @@
+name = "medmacs-discover-worker"
+main = "index.ts"
+compatibility_date = "2024-09-01"
+
+workers_dev = true
+
+routes = [
+  { pattern = "discover.medmacs.app/*", zone_name = "medmacs.app" }
+]
+
+[vars]
+ENVIRONMENT = "production"
+BACKEND_ORIGIN = "https://mug-realm-hundreds-award.trycloudflare.com"
