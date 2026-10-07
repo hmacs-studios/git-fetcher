@@ -129,3 +129,21 @@ export const TestGeneratorIcon: FC<CustomIconProps> = ({ className = 'w-6 h-6', 
     <path d="M21 15.994c0 4 -2.5 6 -3.5 6s-3.5 -2 -3.5 -6c1 0 2.5 -.5 3.5 -1.5c1 1 2.5 1.5 3.5 1.5" />
   </svg>
 );
+
+export const FlameNavIcon: FC<CustomIconProps> = ({ filled, className = 'w-6 h-6', ...props }) => {
+  if (filled) {
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+        <path d="M12 2c0 3.2 -2.5 5.5 -4 7.5c-1.5 2 -2.5 4.3 -2.5 6.5c0 4.7 3.8 8.5 8.5 8.5s8.5 -3.8 8.5 -8.5c0 -2.8 -1.2 -5.2 -3 -7c-0.8 1.5 -2 2.5 -3.5 3c0.5 -2.5 0 -5.5 -4 -10z" />
+      </svg>
+    );
+  }
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 12c2 -2.96 0 -7 -1 -8c0 3.038 -1.773 4.741 -3 6c-1.226 1.26 -2 3.24 -2 5a7 7 0 1 0 14 0c0 -1.532 -.59 -2.902 -1.53 -3.931c-.94 -.029 -2.012 .234 -2.87 1.281c-.858 1.047 -.9 2.58 -.6 3.65c-.8 -1.2 -1.5 -2 -3 -2z" />
+    </svg>
+  );
+};
+

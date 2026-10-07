@@ -6,7 +6,9 @@ import {
   HomeNavIcon,
   TrophyNavIcon,
   UserNavIcon,
+  FlameNavIcon,
 } from '@/components/ui/TabIcons';
+import { MedmacsDiscoverTab } from '@/features/dashboard/components/MedmacsDiscoverTab';
 import { Home, Megaphone, PieChart, Trophy, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from 'next-themes';
@@ -326,6 +328,7 @@ const Dashboard = () => {
 
   const tabs: DashboardNavigationItem[] = [
     { id: 'home', label: 'Home', icon: HomeNavIcon as any },
+    { id: 'discover', label: 'Discover', icon: FlameNavIcon as any },
     { id: 'leaderboard', label: 'Ranks', icon: TrophyNavIcon as any },
     { id: 'analytics', label: 'Stats', icon: ChartDonutNavIcon as any },
     { id: 'profile', label: 'Profile', icon: UserNavIcon as any, avatarUrl: cachedAvatarUrl },
@@ -347,6 +350,9 @@ const Dashboard = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'discover':
+        return <MedmacsDiscoverTab />;
+
       case 'announcements':
         return (
           <Suspense fallback={<LazyTabFallback className="h-[420px]" />}>
@@ -447,15 +453,17 @@ const Dashboard = () => {
       <VersionGuard />
 
       {/* Minimal top bar with announcement icon */}
-      <DashboardHeader
-        displayName={displayName}
-        userPlanDisplayName={userPlanDisplayName}
-        cachedAvatarUrl={cachedAvatarUrl}
-        unreadCount={unreadCount}
-        onOpenAnnouncements={() => navigate('/announcements')}
-      />
+      {activeTab !== 'discover' && (
+        <DashboardHeader
+          displayName={displayName}
+          userPlanDisplayName={userPlanDisplayName}
+          cachedAvatarUrl={cachedAvatarUrl}
+          unreadCount={unreadCount}
+          onOpenAnnouncements={() => navigate('/announcements')}
+        />
+      )}
       {/* Content */}
-      <div className="px-5 mt-[var(--header-height)]">
+      <div className={activeTab === 'discover' ? 'w-full p-0 m-0' : 'px-5 mt-[var(--header-height)]'}>
         {renderTabContent()}
       </div>
 

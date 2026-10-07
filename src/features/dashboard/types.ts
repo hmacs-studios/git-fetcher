@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import type { Institute } from '@/utils/institutes';
 
-export type DashboardTabId = 'announcements' | 'leaderboard' | 'home' | 'analytics' | 'profile';
+export type DashboardTabId = 'announcements' | 'leaderboard' | 'home' | 'analytics' | 'profile' | 'discover';
 
 export type DashboardProfile = {
   avatar_url: string | null;

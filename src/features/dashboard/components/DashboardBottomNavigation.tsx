@@ -18,7 +18,7 @@ type DashboardBottomNavigationProps = {
 };
 
 export function DashboardBottomNavigation({ activeTab, items, onTabChange }: DashboardBottomNavigationProps) {
-  const gridCols = items.length === 4 ? 'grid-cols-4' : 'grid-cols-5';
+  const gridCols = items.length === 4 ? 'grid-cols-4' : items.length === 5 ? 'grid-cols-5' : 'grid-cols-6';
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 pb-[env(safe-area-inset-bottom)]" aria-label="Dashboard">
