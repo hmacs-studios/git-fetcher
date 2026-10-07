@@ -244,10 +244,34 @@ export const MedmacsDiscoverTab: React.FC = () => {
   const nextReel = () => triggerNextReelWithAnim();
   const prevReel = () => triggerPrevReelWithAnim();
 
+  const isFetchingMoreRef = useRef(false);
+
+  // Background batch prefetching (fetches 3 more reels when user reaches near end of array)
+  useEffect(() => {
+    if (reels.length > 0 && currentIndex >= reels.length - 2 && !isFetchingMoreRef.current) {
+      isFetchingMoreRef.current = true;
+      reelDispatcher
+        .fetchReels('user_app', 4, undefined, 3)
+        .then((moreReels) => {
+          if (moreReels && moreReels.length > 0) {
+            setReels((prev) => {
+              const existingIds = new Set(prev.map((r) => r.assigned_id));
+              const newUnique = moreReels.filter((r) => !existingIds.has(r.assigned_id));
+              return newUnique.length > 0 ? [...prev, ...newUnique] : prev;
+            });
+          }
+        })
+        .catch((err) => console.warn('[Prefetch] Error:', err))
+        .finally(() => {
+          isFetchingMoreRef.current = false;
+        });
+    }
+  }, [currentIndex, reels.length]);
+
   const loadReels = async () => {
     setIsLoading(true);
     try {
-      const data = await reelDispatcher.fetchReels('user_app', 4);
+      const data = await reelDispatcher.fetchReels('user_app', 4, undefined, 3);
       if (data && data.length > 0) {
         setReels(data);
       } else {

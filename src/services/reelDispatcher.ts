@@ -137,7 +137,7 @@ export const FALLBACK_CDC_REELS: ClinicalReel[] = [
 ];
 
 class ReelDispatcher {
-  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string): Promise<ClinicalReel[]> {
+  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 3): Promise<ClinicalReel[]> {
     const userUrl = getBackendUrl();
     const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, userUrl, CLOUDFLARE_DIRECT_URL]));
 
@@ -147,7 +147,7 @@ class ReelDispatcher {
     };
 
     for (const baseUrl of candidateUrls) {
-      let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}&limit=50`;
+      let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}&limit=${limit}`;
       if (subject) url += `&subject=${encodeURIComponent(subject)}`;
 
       const controller = new AbortController();
