@@ -62,7 +62,29 @@ export const DrAhroidModal: React.FC<DrAhroidModalProps> = ({
     setIsLoading(true);
 
     try {
-      const promptContext = `You are Dr Ahroid, an elite medical board examiner and clinical professor. The user is asking about the medical case: "${reelTopic}". Category: "${reelCategory}". Clinical details: "${diagnosisText}". Answer their query concisely, accurately, with bulleted high-yield points and board examination pearls.\n\nUser Question: ${textToSend}`;
+      // 1. Fetch RAG Context from Medmacs RAG Engine (Port 8001)
+      let ragContextText = '';
+      try {
+        const ragRes = await fetch(`http://161.118.227.79:8001/search?q=${encodeURIComponent(textToSend)}&top_k=2`, {
+          signal: AbortSignal.timeout(2000),
+        });
+        if (ragRes.ok) {
+          const ragData = await ragRes.json();
+          if (ragData.results && ragData.results.length > 0) {
+            ragContextText = ragData.results.map((r: any) => `[${r.province} Board - ${r.book} (p. ${r.page})]: ${r.content}`).join('\n\n');
+          }
+        }
+      } catch (err) {
+        console.log('[DrAhroidModal] Medmacs RAG fallback to clinical reel context:', err);
+      }
+
+      const promptContext = `You are Dr Ahroid, an elite medical board examiner and clinical professor for Medmacs.
+Medical Case: "${reelTopic}" (${reelCategory})
+Clinical Details: "${diagnosisText}"
+${ragContextText ? `\nMedmacs Textbook RAG Knowledge Base:\n${ragContextText}\n` : ''}
+Answer the user query concisely, accurately, with bulleted high-yield points and board examination pearls grounded in Medmacs RAG reference data.
+
+User Question: ${textToSend}`;
 
       let responseText = '';
       const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
