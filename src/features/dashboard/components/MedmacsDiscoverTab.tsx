@@ -29,9 +29,9 @@ interface HeartAnim {
 }
 
 export const MedmacsDiscoverTab: React.FC = () => {
-  const [reels, setReels] = useState<ClinicalReel[]>([]);
+  const [reels, setReels] = useState<ClinicalReel[]>(FALLBACK_CDC_REELS);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [showPauseOverlay, setShowPauseOverlay] = useState(false);
   const [hearts, setHearts] = useState<HeartAnim[]>([]);

@@ -139,7 +139,7 @@ export const FALLBACK_CDC_REELS: ClinicalReel[] = [
 class ReelDispatcher {
   public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string): Promise<ClinicalReel[]> {
     const userUrl = getBackendUrl();
-    const candidateUrls = Array.from(new Set([userUrl, WORKER_FALLBACK_URL, CLOUDFLARE_DIRECT_URL]));
+    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, userUrl, CLOUDFLARE_DIRECT_URL]));
 
     const headers: Record<string, string> = {
       'bypass-tunnel-reminder': 'true',
@@ -150,8 +150,12 @@ class ReelDispatcher {
       let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}`;
       if (subject) url += `&subject=${encodeURIComponent(subject)}`;
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+
       try {
-        const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers, signal: controller.signal });
+        clearTimeout(timeoutId);
         if (response.ok) {
           const data = await response.json();
           const reels: ClinicalReel[] = data.reels || [];
@@ -160,6 +164,7 @@ class ReelDispatcher {
           }
         }
       } catch (e) {
+        clearTimeout(timeoutId);
         console.warn(`[ReelDispatcher] Endpoint failed (${baseUrl}):`, e);
       }
     }
