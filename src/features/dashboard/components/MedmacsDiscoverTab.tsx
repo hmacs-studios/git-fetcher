@@ -48,11 +48,56 @@ export const MedmacsDiscoverTab: React.FC = () => {
   const touchStartYRef = useRef<number>(0);
   const touchStartXRef = useRef<number>(0);
   const isSwipingRef = useRef<boolean>(false);
+  const wheelCooldownRef = useRef<boolean>(false);
+  const currentIndexRef = useRef<number>(currentIndex);
+  const reelsRef = useRef<ClinicalReel[]>(reels);
+
   const [slideAnim, setSlideAnim] = useState<string>('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    reelsRef.current = reels;
+  }, [reels]);
+
+  useEffect(() => {
     loadReels();
+  }, []);
+
+  // Window-level wheel & keydown listener for desktop reel scrolling
+  useEffect(() => {
+    const handleGlobalWheel = (e: WheelEvent) => {
+      if (wheelCooldownRef.current) return;
+      if (Math.abs(e.deltaY) > 15) {
+        wheelCooldownRef.current = true;
+        if (e.deltaY > 0) {
+          triggerNextReelWithAnim();
+        } else {
+          triggerPrevReelWithAnim();
+        }
+        setTimeout(() => {
+          wheelCooldownRef.current = false;
+        }, 400);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'PageDown') {
+        triggerNextReelWithAnim();
+      } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+        triggerPrevReelWithAnim();
+      }
+    };
+
+    window.addEventListener('wheel', handleGlobalWheel, { passive: true });
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('wheel', handleGlobalWheel);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
 
   // Preload neighboring reel images for instant 0ms swipe transition
@@ -79,6 +124,19 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }
   };
 
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length > 0) {
+      const currentY = e.touches[0].clientY;
+      const currentX = e.touches[0].clientX;
+      const deltaY = currentY - touchStartYRef.current;
+      const deltaX = currentX - touchStartXRef.current;
+
+      if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 20) {
+        isSwipingRef.current = true;
+      }
+    }
+  };
+
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.changedTouches.length === 0) return;
     const touchEndY = e.changedTouches[0].clientY;
@@ -86,22 +144,9 @@ export const MedmacsDiscoverTab: React.FC = () => {
     const deltaY = touchEndY - touchStartYRef.current;
     const deltaX = touchEndX - touchStartXRef.current;
 
-    // Trigger vertical reel swipe if vertical delta > horizontal delta and distance > 40px
-    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 40) {
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 25) {
       isSwipingRef.current = true;
       if (deltaY < 0) {
-        // Swiped UP -> Next Reel
-        triggerNextReelWithAnim();
-      } else {
-        // Swiped DOWN -> Prev Reel
-        triggerPrevReelWithAnim();
-      }
-    }
-  };
-
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (Math.abs(e.deltaY) > 30) {
-      if (e.deltaY > 0) {
         triggerNextReelWithAnim();
       } else {
         triggerPrevReelWithAnim();
@@ -110,17 +155,24 @@ export const MedmacsDiscoverTab: React.FC = () => {
   };
 
   const triggerNextReelWithAnim = () => {
-    if (currentIndex < reels.length - 1) {
+    const curIdx = currentIndexRef.current;
+    const allReels = reelsRef.current;
+    if (curIdx < allReels.length - 1) {
       setSlideAnim('animate-in slide-in-from-bottom duration-300');
-      nextReel();
+      setCurrentIndex(curIdx + 1);
+      setIsPaused(false);
+      triggerHaptic(10);
       setTimeout(() => setSlideAnim(''), 350);
     }
   };
 
   const triggerPrevReelWithAnim = () => {
-    if (currentIndex > 0) {
+    const curIdx = currentIndexRef.current;
+    if (curIdx > 0) {
       setSlideAnim('animate-in slide-in-from-top duration-300');
-      prevReel();
+      setCurrentIndex(curIdx - 1);
+      setIsPaused(false);
+      triggerHaptic(10);
       setTimeout(() => setSlideAnim(''), 350);
     }
   };
@@ -391,9 +443,9 @@ export const MedmacsDiscoverTab: React.FC = () => {
         ref={containerRef}
         onClick={handleTouchTap}
         onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        onWheel={handleWheel}
-        className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer overflow-hidden touch-none"
+        className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer overflow-hidden touch-pan-y"
       >
         <img
           src={currentReel.image_url}
