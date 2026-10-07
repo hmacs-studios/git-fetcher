@@ -17,7 +17,7 @@ import {
   Flame,
   Settings2,
 } from 'lucide-react';
-import { reelDispatcher, ClinicalReel, getBackendUrl, setBackendUrl } from '@/services/reelDispatcher';
+import { reelDispatcher, ClinicalReel, getBackendUrl, setBackendUrl, FALLBACK_CDC_REELS } from '@/services/reelDispatcher';
 import { DrAhroidModal } from '@/components/discover/DrAhroidModal';
 import { triggerHaptic } from '@/utils/haptics';
 import { toast } from 'sonner';
@@ -154,28 +154,53 @@ export const MedmacsDiscoverTab: React.FC = () => {
     }
   };
 
+  const appendMoreReels = async () => {
+    try {
+      const moreData = await reelDispatcher.fetchReels('user_app', 4);
+      if (moreData && moreData.length > 0) {
+        setReels((prev) => {
+          const existingIds = new Set(prev.map((r) => r.assigned_id));
+          const newItems = moreData.filter((r) => !existingIds.has(r.assigned_id));
+          return newItems.length > 0 ? [...prev, ...newItems] : [...prev, ...moreData];
+        });
+      }
+    } catch (e) {
+      console.warn('[MedmacsDiscoverTab] Failed to append more reels:', e);
+    }
+  };
+
   const triggerNextReelWithAnim = () => {
     const curIdx = currentIndexRef.current;
     const allReels = reelsRef.current;
-    if (curIdx < allReels.length - 1) {
-      setSlideAnim('animate-in slide-in-from-bottom duration-300');
-      setCurrentIndex(curIdx + 1);
-      setIsPaused(false);
-      triggerHaptic(10);
-      setTimeout(() => setSlideAnim(''), 350);
+    if (allReels.length === 0) return;
+
+    setSlideAnim('animate-in slide-in-from-bottom duration-300');
+    const nextIdx = (curIdx + 1) % allReels.length;
+    setCurrentIndex(nextIdx);
+    setIsPaused(false);
+    triggerHaptic(10);
+    setTimeout(() => setSlideAnim(''), 350);
+
+    if (curIdx >= allReels.length - 2) {
+      void appendMoreReels();
     }
   };
 
   const triggerPrevReelWithAnim = () => {
     const curIdx = currentIndexRef.current;
-    if (curIdx > 0) {
-      setSlideAnim('animate-in slide-in-from-top duration-300');
-      setCurrentIndex(curIdx - 1);
-      setIsPaused(false);
-      triggerHaptic(10);
-      setTimeout(() => setSlideAnim(''), 350);
-    }
+    const allReels = reelsRef.current;
+    if (allReels.length === 0) return;
+
+    setSlideAnim('animate-in slide-in-from-top duration-300');
+    const prevIdx = (curIdx - 1 + allReels.length) % allReels.length;
+    setCurrentIndex(prevIdx);
+    setIsPaused(false);
+    triggerHaptic(10);
+    setTimeout(() => setSlideAnim(''), 350);
   };
+
+  const nextReel = () => triggerNextReelWithAnim();
+  const prevReel = () => triggerPrevReelWithAnim();
 
   const loadReels = async () => {
     setIsLoading(true);
@@ -184,29 +209,11 @@ export const MedmacsDiscoverTab: React.FC = () => {
       if (data && data.length > 0) {
         setReels(data);
       } else {
-        // Fallback default CDC PHIL Reel if backend feed is empty or initializing
-        setReels([
-          {
-            assigned_id: 'CDC-PHIL-2033',
-            medical_topic: 'Cutaneous Anthrax Eschar',
-            mbbs_year: 4,
-            subject: 'Dermatology / Infectious Diseases',
-            media_category: 'Patient Clinical Photo',
-            identification_text: 'Painless black necrotic cutaneous eschar with surrounding edema',
-            diagnosis_text: 'Cutaneous Anthrax (Bacillus anthracis)',
-            interactive_quiz: {
-              question: 'Which characteristic eschar finding confirms Cutaneous Anthrax?',
-              option_a: 'Painless black eschar with surrounding inflammatory edema',
-              option_b: 'Purulent tender fluctuant nodule',
-              correct_option: 'A',
-              explanation: 'Cutaneous anthrax produces a pathognomonic painless black eschar surrounded by gelatinous edema.',
-            },
-            image_url: 'https://upload.wikimedia.org/wikipedia/commons/5/5f/Anthrax_PHIL_2033.png',
-          },
-        ]);
+        setReels(FALLBACK_CDC_REELS);
       }
     } catch (e) {
       console.error('[MedmacsDiscoverTab] Error loading reels:', e);
+      setReels(FALLBACK_CDC_REELS);
     } finally {
       setIsLoading(false);
     }
