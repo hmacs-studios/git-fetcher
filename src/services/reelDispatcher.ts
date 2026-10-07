@@ -31,7 +31,7 @@ export interface ClinicalReel {
 
 const PRIMARY_TUNNEL_URL = 'https://discover.medmacs.app';
 const WORKER_FALLBACK_URL = 'https://medmacs-discover-worker.ameerhamza1396.workers.dev';
-const CLOUDFLARE_DIRECT_URL = 'https://tags-anyone-respective-cancel.trycloudflare.com';
+const CLOUDFLARE_DIRECT_URL = 'https://sons-jelsoft-ringtone-journalist.trycloudflare.com';
 const LOCAL_STORAGE_BACKEND_KEY = 'medmacs_discover_backend_url';
 
 export function getBackendUrl(): string {

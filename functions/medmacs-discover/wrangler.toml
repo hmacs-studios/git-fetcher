@@ -10,4 +10,4 @@ routes = [
 
 [vars]
 ENVIRONMENT = "production"
-BACKEND_ORIGIN = "https://mug-realm-hundreds-award.trycloudflare.com"
+BACKEND_ORIGIN = "https://sons-jelsoft-ringtone-journalist.trycloudflare.com"
