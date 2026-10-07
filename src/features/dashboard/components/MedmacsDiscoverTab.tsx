@@ -455,13 +455,67 @@ export const MedmacsDiscoverTab: React.FC = () => {
     });
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[80vh] text-white">
-        <div className="w-12 h-12 rounded-full border-4 border-cyan-500 border-t-transparent animate-spin mb-4" />
-        <p className="text-sm font-medium text-cyan-300">Loading Medmacs Discover Engine...</p>
+const DiscoverReelSkeleton: React.FC = () => (
+  <div className="relative w-full h-[calc(100vh-120px)] min-h-[580px] bg-slate-950 overflow-hidden flex flex-col justify-between select-none">
+    {/* 1. TOP LEFT BADGE SKELETON */}
+    <div className="absolute top-4 left-4 z-30">
+      <div className="w-36 h-8 rounded-full bg-slate-800/80 backdrop-blur-md border border-white/5 animate-pulse" />
+    </div>
+
+    {/* TOP RIGHT SETTINGS SKELETON */}
+    <div className="absolute top-4 right-4 z-30">
+      <div className="w-9 h-9 rounded-full bg-slate-800/80 backdrop-blur-md border border-white/5 animate-pulse" />
+    </div>
+
+    {/* 2. CENTER REEL CANVAS SKELETON */}
+    <div className="relative w-full h-full flex items-center justify-center bg-slate-900/90 animate-pulse">
+      <div className="w-16 h-16 rounded-full bg-slate-800/60 flex items-center justify-center border border-white/5">
+        <Flame className="w-8 h-8 text-slate-700 animate-pulse" />
       </div>
-    );
+      <div className="absolute inset-x-0 bottom-0 h-64 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
+    </div>
+
+    {/* 3. RIGHT SIDE CONTROLS SKELETON */}
+    <div className="absolute right-3 bottom-24 z-30 flex flex-col items-center gap-5">
+      <div className="flex flex-col items-center gap-1">
+        <div className="w-11 h-11 rounded-full bg-slate-800/90 border border-white/10 animate-pulse" />
+        <div className="w-6 h-2.5 rounded bg-slate-800 animate-pulse" />
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <div className="w-11 h-11 rounded-full bg-slate-800/90 border border-white/10 animate-pulse" />
+        <div className="w-6 h-2.5 rounded bg-slate-800 animate-pulse" />
+      </div>
+      <div className="flex flex-col items-center gap-1">
+        <div className="w-11 h-11 rounded-full bg-slate-800/90 border border-white/10 animate-pulse" />
+        <div className="w-6 h-2.5 rounded bg-slate-800 animate-pulse" />
+      </div>
+    </div>
+
+    {/* 4. LEFT BOTTOM CAPTION & QUIZ SKELETON */}
+    <div className="absolute left-4 bottom-4 right-20 z-30 flex flex-col gap-2 max-w-[82%]">
+      <div className="flex items-center gap-2">
+        <div className="w-24 h-5 rounded-full bg-slate-800/90 border border-white/5 animate-pulse" />
+        <div className="w-14 h-5 rounded-full bg-slate-800/90 border border-white/5 animate-pulse" />
+      </div>
+      <div className="w-3/4 h-6 rounded-lg bg-slate-800 animate-pulse" />
+      <div className="space-y-1.5">
+        <div className="w-full h-3.5 rounded bg-slate-800/70 animate-pulse" />
+        <div className="w-4/5 h-3.5 rounded bg-slate-800/70 animate-pulse" />
+      </div>
+      <div className="mt-1 p-3 rounded-xl bg-slate-900/90 border border-white/10 flex flex-col gap-2 animate-pulse">
+        <div className="w-2/3 h-4 rounded bg-slate-800" />
+        <div className="grid grid-cols-2 gap-2">
+          <div className="h-8 rounded-lg bg-slate-800/80" />
+          <div className="h-8 rounded-lg bg-slate-800/80" />
+        </div>
+      </div>
+      <div className="mt-1 w-36 h-9 rounded-full bg-gradient-to-r from-cyan-950/60 to-indigo-950/60 border border-cyan-500/20 animate-pulse" />
+    </div>
+  </div>
+);
+
+  if (isLoading) {
+    return <DiscoverReelSkeleton />;
   }
 
   const currentReactState = reactions[currentReel.assigned_id] || { count: 142, liked: false };
