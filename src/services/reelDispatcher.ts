@@ -29,7 +29,7 @@ export interface ClinicalReel {
   created_at?: string;
 }
 
-const PRIMARY_TUNNEL_URL = 'https://mug-realm-hundreds-award.trycloudflare.com';
+const PRIMARY_TUNNEL_URL = 'https://discover.medmacs.app';
 const LOCAL_STORAGE_BACKEND_KEY = 'medmacs_discover_backend_url';
 
 export function getBackendUrl(): string {

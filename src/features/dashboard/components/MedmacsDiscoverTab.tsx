@@ -45,11 +45,85 @@ export const MedmacsDiscoverTab: React.FC = () => {
   const [customBackendInput, setCustomBackendInput] = useState('');
 
   const lastTapTimeRef = useRef<number>(0);
+  const touchStartYRef = useRef<number>(0);
+  const touchStartXRef = useRef<number>(0);
+  const isSwipingRef = useRef<boolean>(false);
+  const [slideAnim, setSlideAnim] = useState<string>('');
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadReels();
   }, []);
+
+  // Preload neighboring reel images for instant 0ms swipe transition
+  useEffect(() => {
+    if (reels.length > 0) {
+      const nextImg = reels[currentIndex + 1]?.image_url;
+      const prevImg = reels[currentIndex - 1]?.image_url;
+      if (nextImg && nextImg.startsWith('http')) {
+        const img = new Image();
+        img.src = nextImg;
+      }
+      if (prevImg && prevImg.startsWith('http')) {
+        const img = new Image();
+        img.src = prevImg;
+      }
+    }
+  }, [currentIndex, reels]);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length > 0) {
+      touchStartYRef.current = e.touches[0].clientY;
+      touchStartXRef.current = e.touches[0].clientX;
+      isSwipingRef.current = false;
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.changedTouches.length === 0) return;
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0].clientX;
+    const deltaY = touchEndY - touchStartYRef.current;
+    const deltaX = touchEndX - touchStartXRef.current;
+
+    // Trigger vertical reel swipe if vertical delta > horizontal delta and distance > 40px
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 40) {
+      isSwipingRef.current = true;
+      if (deltaY < 0) {
+        // Swiped UP -> Next Reel
+        triggerNextReelWithAnim();
+      } else {
+        // Swiped DOWN -> Prev Reel
+        triggerPrevReelWithAnim();
+      }
+    }
+  };
+
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(e.deltaY) > 30) {
+      if (e.deltaY > 0) {
+        triggerNextReelWithAnim();
+      } else {
+        triggerPrevReelWithAnim();
+      }
+    }
+  };
+
+  const triggerNextReelWithAnim = () => {
+    if (currentIndex < reels.length - 1) {
+      setSlideAnim('animate-in slide-in-from-bottom duration-300');
+      nextReel();
+      setTimeout(() => setSlideAnim(''), 350);
+    }
+  };
+
+  const triggerPrevReelWithAnim = () => {
+    if (currentIndex > 0) {
+      setSlideAnim('animate-in slide-in-from-top duration-300');
+      prevReel();
+      setTimeout(() => setSlideAnim(''), 350);
+    }
+  };
 
   const loadReels = async () => {
     setIsLoading(true);
@@ -312,16 +386,19 @@ export const MedmacsDiscoverTab: React.FC = () => {
         </div>
       )}
 
-      {/* 2. REEL IMAGE / CANVAS WITH TAP GESTURES */}
+      {/* 2. REEL IMAGE / CANVAS WITH SWIPE & TAP GESTURES */}
       <div
         ref={containerRef}
         onClick={handleTouchTap}
-        className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer overflow-hidden"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onWheel={handleWheel}
+        className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer overflow-hidden touch-none"
       >
         <img
           src={currentReel.image_url}
           alt={currentReel.medical_topic}
-          className={`w-full h-full object-contain transition-transform duration-300 ${
+          className={`w-full h-full object-contain transition-transform duration-300 ${slideAnim} ${
             isPaused ? 'scale-[0.98] brightness-90' : 'scale-100'
           }`}
         />
