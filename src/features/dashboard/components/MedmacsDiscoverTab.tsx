@@ -455,9 +455,18 @@ export const MedmacsDiscoverTab: React.FC = () => {
         className="relative w-full h-full flex items-center justify-center bg-black cursor-pointer overflow-hidden touch-pan-y"
       >
         <img
+          key={currentReel.assigned_id}
           src={currentReel.image_url}
           alt={currentReel.medical_topic}
-          className={`w-full h-full object-contain transition-transform duration-300 ${slideAnim} ${
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (!target.src.includes('wikimedia.org')) {
+              target.src = 'https://upload.wikimedia.org/wikipedia/commons/5/5f/Anthrax_PHIL_2033.png';
+            }
+          }}
+          className={`w-full h-full object-contain transition-all duration-300 ${slideAnim} ${
             isPaused ? 'scale-[0.98] brightness-90' : 'scale-100'
           }`}
         />
