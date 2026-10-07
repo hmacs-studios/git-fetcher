@@ -342,21 +342,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
     toast.success('Comment added!');
   };
 
-  const nextReel = () => {
-    if (currentIndex < reels.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
-      setIsPaused(false);
-      triggerHaptic(10);
-    }
-  };
 
-  const prevReel = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
-      setIsPaused(false);
-      triggerHaptic(10);
-    }
-  };
 
   if (isLoading) {
     return (
