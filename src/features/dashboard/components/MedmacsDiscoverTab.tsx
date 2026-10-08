@@ -246,12 +246,12 @@ export const MedmacsDiscoverTab: React.FC = () => {
 
   const isFetchingMoreRef = useRef(false);
 
-  // Single reel on-demand prefetching (fetches 1 single reel when user swiped near end of loaded list)
+  // Dynamic on-demand prefetching (fetches 10 more reels when user swiped within 3 reels of queue end)
   useEffect(() => {
-    if (reels.length > 0 && currentIndex >= reels.length - 1 && !isFetchingMoreRef.current) {
+    if (reels.length > 0 && currentIndex >= reels.length - 3 && !isFetchingMoreRef.current) {
       isFetchingMoreRef.current = true;
       reelDispatcher
-        .fetchReels('user_app', 4, undefined, 1)
+        .fetchReels('user_app', 4, undefined, 10)
         .then((moreReels) => {
           if (moreReels && moreReels.length > 0) {
             setReels((prev) => {
@@ -271,7 +271,7 @@ export const MedmacsDiscoverTab: React.FC = () => {
   const loadReels = async () => {
     setIsLoading(true);
     try {
-      const data = await reelDispatcher.fetchReels('user_app', 4, undefined, 1);
+      const data = await reelDispatcher.fetchReels('user_app', 4, undefined, 15);
       if (data && data.length > 0) {
         setReels(data);
       } else {

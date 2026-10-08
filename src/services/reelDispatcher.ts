@@ -180,7 +180,7 @@ async function createClientHmacHeaders(path: string): Promise<Record<string, str
 }
 
 class ReelDispatcher {
-  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 1): Promise<ClinicalReel[]> {
+  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 15): Promise<ClinicalReel[]> {
     const userUrl = getBackendUrl();
     const candidateUrls = Array.from(new Set([PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
     const headers = await createClientHmacHeaders('/api/reels/feed');
@@ -190,7 +190,7 @@ class ReelDispatcher {
       if (subject) url += `&subject=${encodeURIComponent(subject)}`;
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       try {
         const response = await fetch(url, { headers, signal: controller.signal });
