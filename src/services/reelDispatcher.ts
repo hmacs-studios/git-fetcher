@@ -142,15 +142,45 @@ export const FALLBACK_CDC_REELS: ClinicalReel[] = [
   },
 ];
 
-class ReelDispatcher {
-  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 3): Promise<ClinicalReel[]> {
-    const userUrl = getBackendUrl();
-    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
+const MEDMACS_SECRET_KEY = 'medmacs_discover_sec_key_2026_e2e_secure';
 
-    const headers: Record<string, string> = {
+async function createClientHmacHeaders(path: string): Promise<Record<string, string>> {
+  const timestamp = Date.now().toString();
+  try {
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(MEDMACS_SECRET_KEY);
+    const msgData = encoder.encode(`${timestamp}.${path}`);
+    const cryptoKey = await window.crypto.subtle.importKey(
+      'raw',
+      keyData,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, msgData);
+    const hexSig = Array.from(new Uint8Array(signature))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    return {
+      'X-Medmacs-Signature': hexSig,
+      'X-Medmacs-Timestamp': timestamp,
       'bypass-tunnel-reminder': 'true',
       'ngrok-skip-browser-warning': 'true',
     };
+  } catch (e) {
+    return {
+      'bypass-tunnel-reminder': 'true',
+      'ngrok-skip-browser-warning': 'true',
+    };
+  }
+}
+
+class ReelDispatcher {
+  public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 1): Promise<ClinicalReel[]> {
+    const userUrl = getBackendUrl();
+    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
+    const headers = await createClientHmacHeaders('/api/reels/feed');
 
     for (const baseUrl of candidateUrls) {
       let url = `${baseUrl}/api/reels/feed?user_id=${encodeURIComponent(userId)}&year=${year}&limit=${limit}`;
