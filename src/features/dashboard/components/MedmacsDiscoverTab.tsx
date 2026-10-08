@@ -594,7 +594,21 @@ const DiscoverReelSkeleton: React.FC = () => (
               }}
               className="flex-1 bg-cyan-600 hover:bg-cyan-500 py-1.5 rounded-md font-semibold text-white"
             >
-              Save & Reload
+              Save
+            </button>
+            <button
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('medmacs_discover_backend_url');
+                }
+                setCustomBackendInput('https://discover.medmacs.app');
+                setShowSettings(false);
+                toast.success('Reset to Production Endpoint!');
+                loadReels();
+              }}
+              className="bg-slate-800 text-slate-300 py-1.5 px-3 rounded-md hover:bg-slate-700 font-semibold"
+            >
+              Reset
             </button>
           </div>
         </div>

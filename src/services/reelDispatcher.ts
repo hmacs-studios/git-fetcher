@@ -50,7 +50,11 @@ export function getBackendUrl(): string {
 
 export function setBackendUrl(url: string): void {
   if (typeof window !== 'undefined') {
-    localStorage.setItem(LOCAL_STORAGE_BACKEND_KEY, url.trim().replace(/\/$/, ''));
+    if (!url || url.includes('trycloudflare.com') || url.includes('mug-realm')) {
+      localStorage.removeItem(LOCAL_STORAGE_BACKEND_KEY);
+    } else {
+      localStorage.setItem(LOCAL_STORAGE_BACKEND_KEY, url.trim().replace(/\/$/, ''));
+    }
   }
 }
 
