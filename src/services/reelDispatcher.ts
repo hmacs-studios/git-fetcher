@@ -30,15 +30,14 @@ export interface ClinicalReel {
 }
 
 const PRIMARY_TUNNEL_URL = 'https://discover.medmacs.app';
-const WORKER_FALLBACK_URL = 'https://medmacs-discover-worker.ameerhamza1396.workers.dev';
-const CLOUDFLARE_DIRECT_URL = 'https://sons-jelsoft-ringtone-journalist.trycloudflare.com';
+const WORKER_FALLBACK_URL = 'https://discover.medmacs.app';
 const LOCAL_STORAGE_BACKEND_KEY = 'medmacs_discover_backend_url';
 
 export function getBackendUrl(): string {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(LOCAL_STORAGE_BACKEND_KEY);
     if (saved) {
-      if (saved.includes('trycloudflare.com') || saved.includes('mug-realm')) {
+      if (saved.includes('trycloudflare.com') || saved.includes('mug-realm') || saved.includes('sons-jelsoft')) {
         localStorage.removeItem(LOCAL_STORAGE_BACKEND_KEY);
       } else {
         return saved.trim().replace(/\/$/, '');
@@ -183,7 +182,7 @@ async function createClientHmacHeaders(path: string): Promise<Record<string, str
 class ReelDispatcher {
   public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 1): Promise<ClinicalReel[]> {
     const userUrl = getBackendUrl();
-    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
+    const candidateUrls = Array.from(new Set([PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
     const headers = await createClientHmacHeaders('/api/reels/feed');
 
     for (const baseUrl of candidateUrls) {
