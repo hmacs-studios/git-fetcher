@@ -37,7 +37,13 @@ const LOCAL_STORAGE_BACKEND_KEY = 'medmacs_discover_backend_url';
 export function getBackendUrl(): string {
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem(LOCAL_STORAGE_BACKEND_KEY);
-    if (saved) return saved.trim().replace(/\/$/, '');
+    if (saved) {
+      if (saved.includes('trycloudflare.com') || saved.includes('mug-realm')) {
+        localStorage.removeItem(LOCAL_STORAGE_BACKEND_KEY);
+      } else {
+        return saved.trim().replace(/\/$/, '');
+      }
+    }
   }
   return PRIMARY_TUNNEL_URL;
 }
@@ -139,7 +145,7 @@ export const FALLBACK_CDC_REELS: ClinicalReel[] = [
 class ReelDispatcher {
   public async fetchReels(userId: string = 'user_app', year: number = 4, subject?: string, limit: number = 3): Promise<ClinicalReel[]> {
     const userUrl = getBackendUrl();
-    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, userUrl, CLOUDFLARE_DIRECT_URL]));
+    const candidateUrls = Array.from(new Set([WORKER_FALLBACK_URL, PRIMARY_TUNNEL_URL, userUrl].filter(Boolean)));
 
     const headers: Record<string, string> = {
       'bypass-tunnel-reminder': 'true',

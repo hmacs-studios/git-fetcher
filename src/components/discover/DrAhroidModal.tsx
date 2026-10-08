@@ -96,7 +96,7 @@ User Question: ${textToSend}`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: 'Bearer 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',
+          Authorization: 'Bearer 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',
         },
         body: JSON.stringify({
           model: 'nvidia/nemotron-3-ultra-550b-a55b',
