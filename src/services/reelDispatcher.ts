@@ -29,8 +29,8 @@ export interface ClinicalReel {
   created_at?: string;
 }
 
-const PRIMARY_TUNNEL_URL = 'https://discover.medmacs.app';
-const WORKER_FALLBACK_URL = 'https://discover.medmacs.app';
+const PRIMARY_TUNNEL_URL = 'https://medmacs-discover-worker.ameerhamza1396.workers.dev';
+const WORKER_FALLBACK_URL = 'https://medmacs-discover-worker.ameerhamza1396.workers.dev';
 const LOCAL_STORAGE_BACKEND_KEY = 'medmacs_discover_backend_url';
 
 export function getBackendUrl(): string {
