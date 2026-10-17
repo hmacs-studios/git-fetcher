@@ -350,9 +350,6 @@ const Dashboard = () => {
 
   const renderTabContent = () => {
     switch (activeTab) {
-      case 'discover':
-        return <MedmacsDiscoverTab />;
-
       case 'announcements':
         return (
           <Suspense fallback={<LazyTabFallback className="h-[420px]" />}>
@@ -448,7 +445,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background pb-28 dark:from-background dark:via-background dark:to-background" style={{ WebkitOverflowScrolling: 'touch' }}>
+    <div className={`dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background dark:from-background dark:via-background dark:to-background ${activeTab === 'discover' ? 'pb-0' : 'pb-28'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
       <Seo title="Dashboard" description="Your personalized Medmacs App dashboard." canonical="https://medmacs.app/dashboard" />
       <VersionGuard />
 
@@ -462,10 +459,19 @@ const Dashboard = () => {
           onOpenAnnouncements={() => navigate('/announcements')}
         />
       )}
-      {/* Content */}
-      <div className={activeTab === 'discover' ? 'w-full p-0 m-0' : 'px-5 mt-[var(--header-height)]'}>
-        {renderTabContent()}
-      </div>
+      {/* Persistent Discover Reels Tab (Keeps state & background prefetching active across tab switches) */}
+      {activeTab === 'discover' && (
+        <div className="w-full h-screen p-0 m-0 overflow-hidden">
+          <MedmacsDiscoverTab active />
+        </div>
+      )}
+
+      {/* Main Content for other tabs */}
+      {activeTab !== 'discover' && (
+        <div className="px-5 mt-[var(--header-height)]">
+          {renderTabContent()}
+        </div>
+      )}
 
       {dashboardModalOpen && (
         <Suspense fallback={null}>

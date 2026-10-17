@@ -7,11 +7,11 @@ android {
     compileSdk rootProject.ext.compileSdkVersion
 
     defaultConfig {
-        applicationId "com.hmacs.medmacs"
+        applicationId "com.hmacs.medmacs"c
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 38
-        versionName "8.9.0"
+        versionCode 40
+        versionName "9.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         aaptOptions {

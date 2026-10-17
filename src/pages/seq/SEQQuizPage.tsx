@@ -62,7 +62,7 @@ const SEQQuizPage = () => {
   const evaluationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-plan', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();

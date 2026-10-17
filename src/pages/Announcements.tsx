@@ -17,7 +17,7 @@ const AnnouncementsPage = () => {
     type ProfileType = { role: string; plan: string } | null;
 
     const { data: profile } = useQuery<ProfileType>({
-        queryKey: ['profile', user?.id],
+        queryKey: ['profile-role-plan', user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
             const { data, error } = await supabase

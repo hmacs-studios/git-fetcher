@@ -51,7 +51,7 @@ const Referrals = () => {
   const mainRef = useRef<HTMLDivElement>(null);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-referral-code', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase.from('profiles').select('referral_code').eq('id', user.id).maybeSingle();

@@ -132,6 +132,7 @@ export const AIStudyChat = () => {
 
     try {
       let streamedAnswer = '';
+      const assistantIndex = newMsgs.length;
       const data = await aiApiStream('ai/study-chat', {
         topic: currentSession.session_name,
         question: userMsg.content,
@@ -139,7 +140,15 @@ export const AIStudyChat = () => {
         onStatus: (status) => { setLoadingStatus(status); },
         onDelta: (text) => {
           streamedAnswer += text;
-          setMessages([...newMsgs, { role: 'assistant', content: streamedAnswer, timestamp: new Date().toISOString() }]);
+          setMessages((prev) => {
+            const updated = [...prev];
+            if (updated[assistantIndex]) {
+              updated[assistantIndex] = { ...updated[assistantIndex], content: streamedAnswer };
+            } else {
+              updated.push({ role: 'assistant', content: streamedAnswer, timestamp: new Date().toISOString() });
+            }
+            return updated;
+          });
         },
       }, {});
 

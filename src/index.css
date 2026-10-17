@@ -958,3 +958,32 @@ body,
   font-family: 'Quicksand', 'Fredoka', 'Sora', system-ui, sans-serif !important;
 }
 
+@keyframes ambient-wave {
+  0%, 100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: translateY(-4px) scaleY(1.04);
+    opacity: 1;
+  }
+}
+
+.animate-ambient-wave {
+  animation: ambient-wave 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes pill-shimmer {
+  0% {
+    transform: translateX(-100%) rotate(25deg);
+  }
+  100% {
+    transform: translateX(250%) rotate(25deg);
+  }
+}
+
+.animate-pill-shimmer {
+  animation: pill-shimmer 3s ease-in-out infinite;
+}
+

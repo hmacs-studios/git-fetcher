@@ -48,7 +48,7 @@ const SEQSubjectSelectionPage = () => {
   const reduceMotion = useReducedMotion();
 
   const { isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-plan', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase

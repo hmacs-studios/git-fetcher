@@ -114,6 +114,7 @@ export type DashboardAction = {
   link?: string;
   onClick?: () => void;
   gradient: string;
+  softGradient?: string;
   iconColor: string;
   flatIconColor?: string;
   tag?: string;

@@ -39,7 +39,7 @@ const CountUpNumber = ({ target, suffix = '', duration = 1000 }: { target: numbe
 
   if (isAnimating) {
     return (
-      <div className="h-8 w-16 bg-white/20 rounded animate-pulse mx-auto" />
+      <div className="h-8 w-16 bg-muted rounded animate-pulse mx-auto" />
     );
   }
 
@@ -120,34 +120,25 @@ export const ProgressTracker = ({ userId }: ProgressTrackerProps) => {
   const currentStreak = calculateCurrentStreak(answers || []);
 
   const stats = [
-    { label: 'Total Practice', value: totalQuestions, icon: Target, gradient: 'from-blue-600 via-indigo-600 to-violet-700', glow: 'bg-blue-400' },
-    { label: 'Accuracy', value: overallAccuracy, suffix: '%', icon: TrendingUp, gradient: 'from-emerald-600 via-teal-600 to-cyan-700', glow: 'bg-emerald-400' },
-    { label: 'Current Streak', value: currentStreak, suffix: ' days', icon: Flame, gradient: 'from-orange-500 via-red-500 to-rose-600', glow: 'bg-orange-400' },
-    { label: 'Avg Time', value: avgTime, suffix: 's', icon: Clock, gradient: 'from-rose-600 via-pink-600 to-fuchsia-700', glow: 'bg-rose-400' },
+    { label: 'Total Practice', value: totalQuestions, icon: Target, tint: 'from-blue-500/12 via-indigo-500/6 to-transparent', iconColor: 'text-blue-500' },
+    { label: 'Accuracy', value: overallAccuracy, suffix: '%', icon: TrendingUp, tint: 'from-emerald-500/12 via-teal-500/6 to-transparent', iconColor: 'text-emerald-500' },
+    { label: 'Current Streak', value: currentStreak, suffix: ' days', icon: Flame, tint: 'from-orange-500/12 via-red-500/6 to-transparent', iconColor: 'text-orange-500' },
+    { label: 'Avg Time', value: avgTime, suffix: 's', icon: Clock, tint: 'from-rose-500/12 via-pink-500/6 to-transparent', iconColor: 'text-rose-500' },
   ];
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
       {stats.map((stat) => (
-        <div key={stat.label} className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${stat.gradient} text-white shadow-xl p-1`}>
-          <div className="absolute inset-0 opacity-10" style={{
-            backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 15px, rgba(255,255,255,0.3) 15px, rgba(255,255,255,0.3) 30px)`,
-            maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)'
-          }} />
-          <div className="relative z-10 bg-white/10 backdrop-blur-xl rounded-[1.3rem] p-3 sm:p-4 border border-white/10 text-center">
-            <div className="flex justify-center mb-2">
-              <div className="relative">
-                <div className={`absolute inset-0 ${stat.glow} blur-lg opacity-40 rounded-full`} />
-                <div className="relative bg-white/15 p-2 rounded-xl backdrop-blur-md border border-white/20">
-                  <stat.icon className="w-4 h-4 text-white" />
-                </div>
-              </div>
+        <div key={stat.label} className={`relative overflow-hidden rounded-[1.5rem] border border-border/60 bg-gradient-to-br ${stat.tint} backdrop-blur-sm shadow-sm p-3 sm:p-4 text-center`}>
+          <div className="flex justify-center mb-2">
+            <div className={`bg-background/70 p-2 rounded-xl border border-border/60 shadow-sm ${stat.iconColor}`}>
+              <stat.icon className="w-4 h-4" />
             </div>
-            <div className="text-xl sm:text-2xl font-black">
-              <CountUpNumber target={stat.value} suffix={stat.suffix} />
-            </div>
-            <div className="text-white/50 text-[10px] uppercase tracking-widest font-bold mt-1">{stat.label}</div>
           </div>
+          <div className="text-xl sm:text-2xl font-black text-foreground">
+            <CountUpNumber target={stat.value} suffix={stat.suffix} />
+          </div>
+          <div className="text-muted-foreground text-[10px] uppercase tracking-widest font-bold mt-1">{stat.label}</div>
         </div>
       ))}
     </div>

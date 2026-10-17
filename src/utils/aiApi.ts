@@ -119,6 +119,7 @@ export const aiApiStream = async (
   const decoder = new TextDecoder();
   let buffer = '';
   let result: any = {};
+  const streamDeadline = window.setTimeout(() => { void reader.cancel(); }, 45_000);
   const consume = (raw: string) => {
     const blocks = raw.split('\n\n');
     buffer = blocks.pop() || '';
@@ -137,11 +138,15 @@ export const aiApiStream = async (
       }
     }
   };
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    consume(buffer + decoder.decode(value, { stream: true }));
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      consume(buffer + decoder.decode(value, { stream: true }));
+    }
+    if (buffer) consume(`${buffer}\n\n`);
+    return result;
+  } finally {
+    window.clearTimeout(streamDeadline);
   }
-  if (buffer) consume(`${buffer}\n\n`);
-  return result;
 };

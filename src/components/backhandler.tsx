@@ -38,9 +38,14 @@ export default function BackButtonHandler() {
             const usageLimitsSheet = document.querySelector('[data-usage-limits-sheet="true"]');
             const caseOfDayModal = document.querySelector('[data-case-of-day-modal="true"]');
             const termOfDayModal = document.querySelector('[data-term-of-day-modal="true"]');
+            const savedReelsModal = document.querySelector('[data-saved-reels-modal="true"]');
 
-            if (usageLimitsSheet || caseOfDayModal || termOfDayModal) {
-                window.dispatchEvent(new CustomEvent("close-dashboard-modals"));
+            if (usageLimitsSheet || caseOfDayModal || termOfDayModal || savedReelsModal) {
+                if (savedReelsModal) {
+                    window.dispatchEvent(new CustomEvent("close-saved-reels"));
+                } else {
+                    window.dispatchEvent(new CustomEvent("close-dashboard-modals"));
+                }
                 return;
             }
 

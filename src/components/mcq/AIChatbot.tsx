@@ -2,9 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Copy, Send, X, WifiOff } from 'lucide-react';
+import { Copy, Send, X, WifiOff, Mic, MicOff, Loader2, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/hooks/use-toast';
 import { aiApiJson, aiApiOrigin } from '@/utils/aiApi';
+import { transcribeAudio, getBestAudioMimeType, createSilenceDetector, type SilenceDetectorController } from '@/utils/cloudSpeech';
 import { isAiPolicyNotice } from '@/utils/aiPolicyNotice';
 
 interface Message {
@@ -80,18 +82,25 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
   explanationContext,
   currentAnswer,
   correctAnswer,
-  userPlan: _userPlan,
+  userPlan,
   isHidden = false,
   onOpen,
   onQuestionHelp,
   isOnline = true,
   prefillPrompt = ''
 }) => {
+  const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [revealingMessageIndex, setRevealingMessageIndex] = useState<number | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const silenceDetectorRef = useRef<SilenceDetectorController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollAreaRef = useRef<HTMLDivElement>(null);
   const pullStartYRef = useRef<number | null>(null);
@@ -105,6 +114,110 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
     if (isOpen && prefillPrompt) setInput(prefillPrompt);
   }, [isOpen, prefillPrompt]);
 
+  const isPremium = userPlan === 'premium';
+
+  const handleMicClick = async () => {
+    if (!isPremium) {
+      toast({
+        title: "Premium Feature 👑",
+        description: "Cloud Voice Assistant (Whisper AI) is available exclusively for Premium members.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isRecordingAudio) {
+      silenceDetectorRef.current?.stop();
+      silenceDetectorRef.current = null;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        mediaRecorderRef.current.stop();
+      }
+      return;
+    }
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast({
+          title: "Microphone Not Supported",
+          description: "Your browser does not support audio recording.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      const mimeType = getBestAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+
+      // Auto-stop recording when user finishes speaking (1.6s silence)
+      silenceDetectorRef.current = createSilenceDetector(stream, {
+        silenceDurationMs: 1600,
+        onSilence: () => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        },
+      });
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        setIsRecordingAudio(false);
+        silenceDetectorRef.current?.stop();
+        silenceDetectorRef.current = null;
+        stream.getTracks().forEach(track => track.stop());
+
+        if (audioChunksRef.current.length === 0) return;
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        
+        setIsTranscribingAudio(true);
+        try {
+          const transcribedText = await transcribeAudio(audioBlob);
+          if (transcribedText) {
+            setInput((prev) => (prev ? `${prev} ${transcribedText}` : transcribedText));
+            if (textareaRef.current) {
+              textareaRef.current.focus();
+              setTimeout(() => {
+                if (textareaRef.current) {
+                  textareaRef.current.style.height = 'auto';
+                  textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+                }
+              }, 50);
+            }
+          }
+        } catch (err: any) {
+          console.error("Transcription error:", err);
+          toast({
+            title: "Voice Transcription Failed",
+            description: err?.message || "Could not transcribe audio. Please try again.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsTranscribingAudio(false);
+        }
+      };
+
+      recorder.start(250);
+      setIsRecordingAudio(true);
+    } catch (err: any) {
+      console.error("Mic permission error:", err);
+      silenceDetectorRef.current?.stop();
+      silenceDetectorRef.current = null;
+      setIsRecordingAudio(false);
+      toast({
+        title: "Microphone Access Denied",
+        description: "Please allow microphone permissions to use voice input.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const sendMessage = async (message: string) => {
     if (!message.trim() || isLoading) return;
@@ -120,13 +233,20 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
     const responseIndex = messages.length + 1;
     setMessages(prev => [...prev, userMessage]);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
     setIsLoading(true);
     try {
       let composedPrompt = message.trim();
       if (questionContext) {
         composedPrompt = `MCQ Question: ${questionContext}\nCorrect Answer: ${correctAnswer}\nUser Selected: ${currentAnswer || 'None'}\nExplanation Provided: ${explanationContext}\n\nUser Query: ${message.trim()}`;
       }
-      const data = await aiApiJson<{ answer?: string }>('ai/study-chat', { question: composedPrompt }, {});
+      const historyTurns = messages.slice(-8).map((m) => ({
+        sender: m.role === 'user' ? ('user' as const) : ('ai' as const),
+        text: m.content,
+      }));
+      const data = await aiApiJson<{ answer?: string }>('ai/study-chat', { question: composedPrompt, history: historyTurns }, {});
       const answer = data.answer || 'Sorry, I could not generate a response.';
       setRevealingMessageIndex(responseIndex);
       setMessages(prev => [...prev, { role: 'assistant', content: answer, timestamp: new Date().toISOString() }]);
@@ -248,9 +368,15 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
             {/* Edge-to-edge header with fade — no colored bar, content fades into status bar */}
             <div className="relative flex-shrink-0">
               {/* Fade overlay at top for status bar blend */}
-              <div className="absolute top-0 left-0 right-0 h-[env(safe-area-inset-top,0px)] bg-gradient-to-b from-background to-transparent z-10 pointer-events-none" />
+              <div
+                className="absolute top-0 left-0 right-0 bg-gradient-to-b from-background to-transparent z-10 pointer-events-none"
+                style={{ height: 'max(3.5rem, calc(env(safe-area-inset-top, 0px) + 1.25rem))' }}
+              />
 
-              <div className="flex items-center justify-between border-b border-border/40 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+12px)]">
+              <div
+                className="flex items-center justify-between border-b border-border/40 px-4 pb-3"
+                style={{ paddingTop: 'max(3.5rem, calc(env(safe-area-inset-top, 0px) + 1.25rem))' }}
+              >
                 <div className="flex items-center space-x-2">
                   <div className="h-9 w-9 overflow-hidden">
                     <img src="/lovable-uploads/Mascot-mini.png" alt="Dr. Ahroid" className="h-full w-full object-contain" />
@@ -287,7 +413,7 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
                 ) : messages.length === 0 ? (
                     <div className="flex h-full flex-col items-center justify-center py-12 text-center">
                       <div className="mb-4 h-16 w-16 overflow-hidden">
-                        <img src="/lovable-uploads/Mascot-mini.png" alt="Dr. Ahroid" className="h-full w-full object-contain" />
+                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-full w-full object-contain" />
                       </div>
                       <p className="font-['Syne'] text-base font-extrabold tracking-[-0.03em] text-foreground">Ask me anything</p>
                       <p className="text-xs text-muted-foreground mt-1">I'm Dr. Ahroid, your MBBS tutor.</p>
@@ -380,19 +506,100 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
               )}
 
               {/* Input */}
-              <div className="flex-shrink-0 border-t border-border/30 px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] sm:pb-3">
+              <div className="relative flex-shrink-0 px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)] sm:pb-3">
                 <form
                   onSubmit={handleSubmit}
-                  className="flex min-h-14 items-center gap-2 rounded-2xl border border-border/70 bg-card p-1.5 shadow-lg shadow-black/[0.04] transition-all focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
+                  className={`flex items-end gap-2 rounded-2xl px-3 py-2 transition-all ${
+                    messages.length === 0
+                      ? 'border border-primary/20 bg-white/20 backdrop-blur-md dark:bg-black/20 focus-within:bg-white/30 dark:focus-within:bg-black/30'
+                      : 'border-0 bg-secondary/50 dark:bg-zinc-800/60 shadow-sm focus-within:bg-secondary/70 dark:focus-within:bg-zinc-800'
+                  }`}
                 >
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={isOnline ? 'Ask Dr. Ahroid anything medical...' : 'Connect to internet to use AI chat'}
-                    disabled={isLoading || !isOnline}
-                    className="h-11 flex-1 rounded-none border-0 bg-transparent px-3 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  />
-                  <Button type="submit" disabled={isLoading || !isOnline || !input.trim()} size="sm" className="h-10 w-10 shrink-0 rounded-xl bg-primary p-0 shadow-md shadow-primary/20 hover:bg-primary/90">
+                  <div className="relative flex-1 flex items-center">
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      rows={1}
+                      onChange={(e) => {
+                        setInput(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                          e.preventDefault();
+                          if (!isLoading && isOnline && input.trim()) {
+                            handleSubmit(e);
+                          }
+                        }
+                      }}
+                      placeholder={
+                        !isOnline
+                          ? 'Connect to internet to use AI chat'
+                          : isRecordingAudio
+                          ? 'Listening... (auto-stops when you pause)'
+                          : isTranscribingAudio
+                          ? 'Processing audio with Whisper AI...'
+                          : isLoading
+                          ? 'Finding results...'
+                          : 'Ask Dr. Ahroid anything medical...'
+                      }
+                      disabled={isLoading || !isOnline || isTranscribingAudio}
+                      className="w-full resize-none border-0 bg-transparent py-1.5 pl-2 pr-9 text-sm font-medium shadow-none outline-none placeholder:text-muted-foreground/70 focus:ring-0 max-h-32 overflow-y-auto"
+                    />
+                    {(isRecordingAudio || isTranscribingAudio || isLoading) && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center gap-2 overflow-hidden pl-2 pr-9 text-sm font-medium">
+                        {isRecordingAudio ? (
+                          <span className="flex items-center gap-2 text-rose-500 animate-pulse">
+                            <span className="relative flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
+                              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
+                            </span>
+                            Listening... (auto-stops when you pause)
+                          </span>
+                        ) : isTranscribingAudio ? (
+                          <span className="flex items-center gap-2 text-amber-500 dark:text-amber-400">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Processing audio with Whisper AI...
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2 text-primary">
+                            <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                            Finding results...
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleMicClick}
+                      disabled={isLoading || !isOnline || isTranscribingAudio}
+                      aria-label="Voice input"
+                      title={
+                        isTranscribingAudio
+                          ? "Transcribing with Whisper AI..."
+                          : isRecordingAudio
+                          ? "Recording... Tap to stop"
+                          : "Click to speak (Whisper AI)"
+                      }
+                      className={`absolute right-1 bottom-1 rounded-lg p-1.5 transition-all ${
+                        isRecordingAudio
+                          ? 'bg-destructive text-white animate-pulse shadow-md shadow-destructive/30'
+                          : isTranscribingAudio
+                          ? 'bg-amber-500 text-white animate-pulse'
+                          : 'text-muted-foreground hover:bg-primary/10 hover:text-primary active:scale-95'
+                      }`}
+                    >
+                      {isTranscribingAudio ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : isRecordingAudio ? (
+                        <MicOff className="h-4 w-4" />
+                      ) : (
+                        <Mic className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                  <Button type="submit" disabled={isLoading || !isOnline || !input.trim()} size="sm" className="h-9 w-9 shrink-0 rounded-xl bg-primary p-0 shadow-md shadow-primary/20 hover:bg-primary/90">
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>

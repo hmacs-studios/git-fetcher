@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { BookOpen, ChevronLeft, ChevronRight, FlaskConical, Loader2, RotateCcw, Sparkles, Wand2 } from 'lucide-react';
+import { BookOpen, ChevronLeft, ChevronRight, FlaskConical, Loader2, RotateCcw, Sparkles, Wand2, Bookmark } from 'lucide-react';
 import { recordGeneratedFlashcards } from '@/components/profile/AchievementBadges';
 import { useAuth } from '@/hooks/useAuth';
 import { CorrectionMCQModal } from './CorrectionMCQModal';
@@ -13,6 +13,7 @@ import { Flashcard, MistakeChapter } from './types';
 import { parseBoldText } from '@/utils/format';
 import { useNavigate } from 'react-router-dom';
 import { InteractiveFlashcard } from './InteractiveFlashcard';
+import { fetchSavedFlashcards, toggleSaveFlashcard, SavedFlashcardItem } from '@/services/savedFlashcards';
 
 import { LottiePlayer } from '@/components/LottiePlayer';
 import bouncingDotsAnimationData from '@/assets/animations/bouncing-dots-loading.json';
@@ -36,13 +37,29 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [savedCards, setSavedCards] = useState<SavedFlashcardItem[]>([]);
   const [activeCard, setActiveCard] = useState(0);
   const [batchIndex, setBatchIndex] = useState(0);
   const [cardsLoading, setCardsLoading] = useState(false);
   const [flashcardModalOpen, setFlashcardModalOpen] = useState(false);
+  const [savedDeckOpen, setSavedDeckOpen] = useState(false);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [limitModalOpen, setLimitModalOpen] = useState(false);
   const [limitDetails, setLimitDetails] = useState(getAiLimitDetails(null));
+
+  const loadSavedCards = async () => {
+    const list = await fetchSavedFlashcards(user?.id);
+    setSavedCards(list);
+  };
+
+  useEffect(() => {
+    loadSavedCards();
+  }, [user?.id]);
+
+  const handleToggleSave = async (cardToSave: Flashcard) => {
+    await toggleSaveFlashcard(cardToSave, weakestChapter?.name, user?.id);
+    await loadSavedCards();
+  };
 
   const loadFlashcards = async (nextBatch = false) => {
     if (!weakestChapter) return;
@@ -115,10 +132,23 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
             </div>
           </div>
 
-          <Button className="h-12 w-full rounded-2xl font-black" onClick={() => loadFlashcards(false)} disabled={cardsLoading || !weakestChapter}>
-            {cardsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-            Build Flashcards
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button className="h-12 flex-1 rounded-2xl font-black" onClick={() => loadFlashcards(false)} disabled={cardsLoading || !weakestChapter}>
+              {cardsLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+              Build Flashcards
+            </Button>
+            {savedCards.length > 0 && (
+              <Button
+                variant="outline"
+                className="h-12 border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-300 font-bold px-3.5 rounded-2xl"
+                onClick={() => { setActiveCard(0); setSavedDeckOpen(true); }}
+                title="View Saved Flashcards"
+              >
+                <Bookmark className="h-4 w-4 fill-current mr-1.5" />
+                Saved ({savedCards.length})
+              </Button>
+            )}
+          </div>
 
           {flashcards.length > 0 && (
             <Button variant="outline" className="w-full rounded-xl" onClick={() => setFlashcardModalOpen(true)}>
@@ -128,6 +158,33 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
           )}
         </CardContent>
       </Card>
+
+      {/* Saved Flashcards Modal Deck */}
+      <Dialog open={savedDeckOpen} onOpenChange={setSavedDeckOpen}>
+        <DialogContent className="max-w-md p-0 border-none bg-transparent shadow-none [&>button]:hidden flex flex-col items-center justify-center">
+          <DialogTitle className="sr-only">Saved Flashcards</DialogTitle>
+          <DialogDescription className="sr-only">Access your saved medical flashcards</DialogDescription>
+          {savedCards.length > 0 && (
+            <div className="w-full space-y-3">
+              <InteractiveFlashcard
+                card={savedCards[activeCard < savedCards.length ? activeCard : 0]}
+                currentIndex={activeCard < savedCards.length ? activeCard : 0}
+                totalCards={savedCards.length}
+                chapterName={savedCards[activeCard < savedCards.length ? activeCard : 0]?.chapter_name || 'Saved Deck'}
+                isSaved={true}
+                onToggleSave={() => handleToggleSave(savedCards[activeCard < savedCards.length ? activeCard : 0] as any)}
+                onClose={() => setSavedDeckOpen(false)}
+                onSwipeNext={() => setActiveCard((index) => (index + 1) % savedCards.length)}
+                onSwipePrev={() => setActiveCard((index) => (index - 1 + savedCards.length) % savedCards.length)}
+                onAskDrAhroid={(prompt) => {
+                  setSavedDeckOpen(false);
+                  navigate('/ai/chatbot', { state: { prefillPrompt: prompt } });
+                }}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={flashcardModalOpen} onOpenChange={setFlashcardModalOpen}>
         <DialogContent className="max-w-md p-0 border-none bg-transparent shadow-none [&>button]:hidden flex flex-col items-center justify-center">
@@ -191,9 +248,15 @@ export const SmartDeck = ({ weakestChapter }: SmartDeckProps) => {
                 totalCards={flashcards.length}
                 chapterName={weakestChapter?.name}
                 batchIndex={batchIndex}
+                isSaved={savedCards.some((s) => s.front === currentCard.front && s.back === currentCard.back)}
+                onToggleSave={() => handleToggleSave(currentCard)}
                 onClose={() => setFlashcardModalOpen(false)}
                 onSwipeNext={() => setActiveCard((index) => index + 1)}
                 onSwipePrev={() => setActiveCard((index) => Math.max(0, index - 1))}
+                onAskDrAhroid={(prompt) => {
+                  setFlashcardModalOpen(false);
+                  navigate('/ai/chatbot', { state: { prefillPrompt: prompt } });
+                }}
               />
             </div>
           ) : (

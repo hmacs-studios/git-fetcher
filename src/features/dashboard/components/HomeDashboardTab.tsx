@@ -5,10 +5,13 @@ import {
   ArrowRight,
   BookOpen,
   Crown,
+  Facebook,
   Flame,
   FlaskConical,
   Gamepad2,
   Gauge,
+  Instagram,
+  Linkedin,
   Sparkles,
   Star,
   Stethoscope,
@@ -207,10 +210,32 @@ export function HomeDashboardTab({
       <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
         <Zap className="text-amber-500 fill-amber-500 w-3.5 h-3.5" /> Quick Actions
       </h2>
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {quickActions.map((action) => (
-          <DashboardActionCard key={action.title} action={action} fixedHeight flat offlineMode={isOfflineMode} />
-        ))}
+      <div className="grid grid-cols-2 gap-3.5 mb-3">
+        {quickActions.map((action) => {
+          const card = (
+            <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
+          );
+          if (action.title !== 'Learn with Dr Ahroid') return card;
+
+          // Subtle shimmer sweep on the Dr Ahroid chat launcher every ~12s.
+          return (
+            <div key={action.title} className="relative h-full w-full overflow-hidden rounded-3xl">
+              {card}
+              <motion.span
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-0 w-2/3 bg-gradient-to-r from-transparent via-primary/30 to-transparent"
+                initial={{ x: '-150%' }}
+                animate={{ x: ['-150%', '320%'] }}
+                transition={{ duration: 1.15, repeat: Infinity, repeatDelay: 10.85, ease: 'easeInOut' }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div className="mb-6 -mt-0.5 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-3 shadow-sm">
+        <p className="text-center text-xs font-black leading-relaxed text-foreground">
+          <span className="text-primary">Dr Ahroid</span> is the only AI in Pakistan trained on actual medical books.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
@@ -282,7 +307,7 @@ export function HomeDashboardTab({
           </div>
           <div className="grid grid-cols-2 gap-3 mb-6">
             {instituteModules.map((action) => (
-              <DashboardActionCard key={action.title} action={action} flat offlineMode={isOfflineMode} />
+              <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
             ))}
           </div>
         </div>
@@ -309,7 +334,7 @@ export function HomeDashboardTab({
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {personalizationActions.map((action) => (
-          <DashboardActionCard key={action.title} action={action} flat offlineMode={isOfflineMode} />
+          <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
         ))}
       </div>
 
@@ -398,6 +423,38 @@ export function HomeDashboardTab({
           </div>
         </div>
       )}
+
+      <div className="mb-6 border-t border-border/30 pt-4">
+        <div className="flex items-center justify-center gap-5">
+          <a
+            href="https://www.instagram.com/medmacs.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Medmacs on Instagram"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Instagram className="h-5 w-5" aria-hidden="true" />
+          </a>
+          <a
+            href="https://www.facebook.com/medmacspk"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Medmacs on Facebook"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Facebook className="h-5 w-5" aria-hidden="true" />
+          </a>
+          <a
+            href="https://www.linkedin.com/in/dr-ameerhamza/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Dr. Ameer Hamza on LinkedIn"
+            className="flex h-11 w-11 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Linkedin className="h-5 w-5" aria-hidden="true" />
+          </a>
+        </div>
+      </div>
 
       {displayProducts.length > 0 && (
         <div className="mb-6 border-t border-border/30 pt-4">

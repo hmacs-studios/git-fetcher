@@ -33,8 +33,9 @@ import {
     SheetClose
 } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useCachedImage } from '@/hooks/useCachedImage';
+import { invalidateCachedImage, useCachedImage } from '@/hooks/useCachedImage';
 import { Badge } from '@/components/ui/badge';
+import { triggerHaptic } from '@/utils/haptics';
 import { Slider } from '@/components/ui/slider';
 import Cropper from 'react-easy-crop';
 
@@ -148,7 +149,8 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
     const [rotation, setRotation] = useState(0);
     const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
-    const userAvatarUrl = profileData?.avatar_url;
+    const [avatarUrlOverride, setAvatarUrlOverride] = useState<string | null | undefined>(undefined);
+    const userAvatarUrl = avatarUrlOverride !== undefined ? avatarUrlOverride : profileData?.avatar_url;
     const cachedAvatarUrl = useCachedImage(userAvatarUrl);
     const currentPlanColorClasses = planColors[rawUserPlan] || planColors['default'];
 
@@ -323,7 +325,10 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
             if (error) throw error;
             return data as any;
         },
-        onSuccess: () => {
+        onSuccess: (_data, newAvatarUrl) => {
+            setAvatarUrlOverride(newAvatarUrl);
+            invalidateCachedImage(profileData?.avatar_url);
+            invalidateCachedImage(newAvatarUrl);
             queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
             queryClient.invalidateQueries({ queryKey: ['profileDropdownProfile', user.id] });
             resetDialogState();
@@ -343,6 +348,8 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
             if (error) throw error;
         },
         onSuccess: () => {
+            setAvatarUrlOverride(null);
+            invalidateCachedImage(profileData?.avatar_url);
             queryClient.invalidateQueries({ queryKey: ['profile', user.id] });
             queryClient.invalidateQueries({ queryKey: ['profileDropdownProfile', user.id] });
             toast.success('Profile picture deleted successfully!');
@@ -414,7 +421,7 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
 
             {isHeader ? (
                 <div className="flex items-center space-x-3">
-                    <Button variant="ghost" size="sm" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} className="w-9 h-9 p-0 hover:scale-110 transition-transform duration-200">
+                    <Button variant="ghost" size="sm" onClick={() => { triggerHaptic(12); setTheme(theme === "dark" ? "light" : "dark"); }} className="w-9 h-9 p-0 hover:scale-110 transition-transform duration-200">
                         {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                     </Button>
                     <Badge

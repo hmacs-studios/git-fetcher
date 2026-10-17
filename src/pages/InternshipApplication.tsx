@@ -81,7 +81,7 @@ const InternshipApplication = () => {
 
   // Get user profile data for the badge (same as MCQs.tsx)
   const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-plan', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase

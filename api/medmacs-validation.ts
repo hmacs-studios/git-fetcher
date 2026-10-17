@@ -30,7 +30,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
       const referenceData = await fetchReferenceChunks(searchQuery, 10);
       internalReferences = Array.isArray(referenceData?.results) ? referenceData.results : [];
     } catch (error) {
-      console.error('OCI Reference/NLI vector search failed:', error);
+      console.error('Reference validation search failed:', error);
     }
 
     // Filter relevant chunks matching similarity confidence threshold (score >= 0.35)

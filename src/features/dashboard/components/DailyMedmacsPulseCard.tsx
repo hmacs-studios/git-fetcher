@@ -26,6 +26,7 @@ interface DailyMedmacsPulseCardProps {
 }
 
 const DAILY_GAME_API_URL = 'https://dailygame.medmacs.app/api/daily-game';
+const DAILY_GAME_WORKERS_DEV_URL = 'https://dailygame-medmacs.ameerhamza1396.workers.dev/api/daily-game';
 
 /**
  * Calculates the Daily Game cycle string based on 3:00 PM PKT (UTC+5) daily refresh.
@@ -329,22 +330,26 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
             // DB query attempt fallback
           }
 
-          // 2. Try Cloudflare Worker endpoint with 3s timeout
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3000);
-          const cfRes = await fetch(`${DAILY_GAME_API_URL}?year=${yearKey}&cycle=${pktCycleStr}&_t=${Date.now()}`, { 
-            cache: 'no-store',
-            signal: controller.signal 
-          }).catch(() => null);
-          clearTimeout(timeoutId);
+          // 2. Try Cloudflare Worker endpoint (custom domain, then workers.dev) with 3s per-base timeout
+          for (const endpoint of [DAILY_GAME_API_URL, DAILY_GAME_WORKERS_DEV_URL]) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+            const cfRes = await fetch(`${endpoint}?year=${yearKey}&cycle=${pktCycleStr}&_t=${Date.now()}`, {
+              cache: 'no-store',
+              signal: controller.signal
+            }).catch(() => null);
+            clearTimeout(timeoutId);
 
-          if (cfRes && cfRes.ok) {
-            const cfData = await cfRes.json().catch(() => null);
-            if (cfData?.prev_winner) fetchedWinner = cfData.prev_winner;
-            if (Array.isArray(cfData?.prev_winners)) fetchedWinners = cfData.prev_winners;
-            if (cfData?.today_leader) fetchedLeader = cfData.today_leader;
-            if (Array.isArray(cfData?.today_leaders)) fetchedLeaders = cfData.today_leaders;
-            if (cfData?.question) chosenMCQ = cfData.question;
+            if (cfRes && cfRes.ok) {
+              const cfData = await cfRes.json().catch(() => null);
+              if (cfData?.prev_winner) fetchedWinner = cfData.prev_winner;
+              if (Array.isArray(cfData?.prev_winners)) fetchedWinners = cfData.prev_winners;
+              if (cfData?.today_leader) fetchedLeader = cfData.today_leader;
+              if (Array.isArray(cfData?.today_leaders)) fetchedLeaders = cfData.today_leaders;
+              if (cfData?.question) chosenMCQ = cfData.question;
+            }
+
+            if (chosenMCQ && fetchedWinner && fetchedWinners.length > 0) break;
           }
 
           // 3. If Cloudflare worker is unreachable or missing question, fetch directly from Supabase RPC with timeout

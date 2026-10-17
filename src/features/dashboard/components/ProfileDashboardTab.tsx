@@ -57,7 +57,7 @@ const mainSettingsAfterUsage = [
   { label: 'Subscription', icon: CreditCard, link: '/pricing' },
   { label: 'Redeem Code', icon: Award, link: '/redeem' },
   { label: 'Purchase History', icon: Receipt, link: '/purchase-history' },
-  { label: 'About Medmacs', icon: Users, link: '/teams' },
+  { label: 'Know More about Medmacs', icon: Users, link: '/teams' },
   { label: 'Contact Us', icon: Mail, link: '/contact-us' },
 ] as const;
 

@@ -25,14 +25,14 @@ ToastViewport.displayName = ToastPrimitives.Viewport.displayName
 
 const toastVariants = cva(
   // Visuals: Rounded-full (pill), dark surface, and slide-up animation
-  "group pointer-events-auto relative flex w-full max-w-fit items-center justify-between space-x-4 overflow-hidden rounded-full border-none px-6 py-3 shadow-xl transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full",
+  "group toast-surface pointer-events-auto relative flex w-fit max-w-[calc(100vw-1rem)] items-center justify-between space-x-4 overflow-hidden rounded-full border-none bg-opacity-85 px-5 py-2.5 shadow-lg transition-all data-[swipe=cancel]:translate-x-0 data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[swipe=end]:animate-out data-[state=closed]:fade-out-80 data-[state=closed]:slide-out-to-bottom-full data-[state=open]:slide-in-from-bottom-full",
   {
     variants: {
       variant: {
         // Material "Surface" colors: Deep Charcoal
-        default: "bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-900",
+        default: "bg-zinc-900/85 text-zinc-100 dark:bg-zinc-100/85 dark:text-zinc-900",
         destructive:
-          "bg-red-600 text-white",
+          "w-full max-w-none justify-center rounded-none bg-red-600/85 px-5 py-3 text-center text-white",
       },
     },
     defaultVariants: {

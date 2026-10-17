@@ -68,7 +68,7 @@ const SavedMCQsPage = () => {
   }, [isFeatureLoading, isSavedQuestionsAccessible]);
 
   const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-plan-avatar', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase.from('profiles').select('plan, avatar_url').eq('id', user.id).maybeSingle();

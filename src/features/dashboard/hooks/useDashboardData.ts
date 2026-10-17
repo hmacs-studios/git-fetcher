@@ -215,9 +215,11 @@ export function useDashboardData({
   const dashboardAnnouncementsQuery = useQuery<DashboardAnnouncement[]>({
     queryKey: ['dashboardAnnouncements', profileQuery.data?.institute, profileQuery.data?.year],
     queryFn: async () => {
+      // Select all columns so environments where the optional `years`
+      // targeting column has not been migrated still succeed.
       const { data, error } = await supabase
         .from('dashboard_announcements')
-        .select('id, card_heading, card_subheading, card_background_image_url, card_secondary_image_url, modal_heading, modal_subheading, modal_background_image_url, modal_image_urls, cta_text, cta_url, institutes, years')
+        .select('*')
         .eq('is_published', true)
         .order('display_order', { ascending: true })
         .order('created_at', { ascending: false });

@@ -146,7 +146,7 @@ const Pricing = () => {
     });
 
     const { data: profile, isLoading: isProfileLoading } = useQuery<{ plan: string } | null>({
-        queryKey: ['profile', user?.id],
+        queryKey: ['profile-plan', user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
             const { data, error } = await supabase

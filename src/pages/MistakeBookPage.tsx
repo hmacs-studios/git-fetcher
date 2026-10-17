@@ -13,7 +13,7 @@ const MistakeBookPage = () => {
   const { groupedSubjects, wrongAttempts, isLoading } = usePersonalizationData();
 
   const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-plan', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data, error } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();

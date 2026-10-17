@@ -1,9 +1,25 @@
 import { useEffect, useState } from 'react';
 
 const IMAGE_CACHE = 'medmacs-profile-image-cache';
+const IMAGE_INVALIDATED_EVENT = 'medmacs-profile-image-invalidated';
+
+export const invalidateCachedImage = (url?: string | null) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(IMAGE_INVALIDATED_EVENT, { detail: { url: url || null } }));
+};
 
 export const useCachedImage = (url?: string | null) => {
   const [cachedUrl, setCachedUrl] = useState<string | null>(url || null);
+  const [cacheVersion, setCacheVersion] = useState(0);
+
+  useEffect(() => {
+    const handleInvalidation = (event: Event) => {
+      const invalidatedUrl = (event as CustomEvent<{ url?: string | null }>).detail?.url;
+      if (!invalidatedUrl || invalidatedUrl === url) setCacheVersion((version) => version + 1);
+    };
+    window.addEventListener(IMAGE_INVALIDATED_EVENT, handleInvalidation);
+    return () => window.removeEventListener(IMAGE_INVALIDATED_EVENT, handleInvalidation);
+  }, [url]);
 
   useEffect(() => {
     let revokedUrl: string | null = null;
@@ -17,6 +33,7 @@ export const useCachedImage = (url?: string | null) => {
 
       try {
         const cache = await caches.open(IMAGE_CACHE);
+        if (cacheVersion > 0) await cache.delete(url);
         const cached = await cache.match(url);
 
         if (cached) {
@@ -49,7 +66,7 @@ export const useCachedImage = (url?: string | null) => {
       cancelled = true;
       if (revokedUrl) URL.revokeObjectURL(revokedUrl);
     };
-  }, [url]);
+  }, [url, cacheVersion]);
 
   return cachedUrl || url || null;
 };

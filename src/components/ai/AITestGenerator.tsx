@@ -62,7 +62,7 @@ export const AITestGenerator: React.FC = () => {
   };
 
   const { data: profile } = useQuery({
-    queryKey: ['profile', user?.id],
+    queryKey: ['profile-name', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
       const { data } = await supabase.from('profiles').select('full_name, username').eq('id', user.id).maybeSingle();

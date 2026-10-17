@@ -20,9 +20,12 @@ export interface ReferenceChunk {
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pxjvltgarzvoptdfdkxq.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_RVLZ7IetJ-w7raWeYGWa5A_5wV4g5rI';
-const OCI_SECRET_KEY = process.env.MEDMACS_OCI_SECRET_KEY || 'HMACS1396$';
-const getPrimaryUrl = () => process.env.REFERENCE_API_URL || 'https://reference-service.medmacs.app/search';
-const FALLBACK_REFERENCE_URL = 'http://161.118.227.79:8000/search';
+const OCI_SECRET_KEY = process.env.MEDMACS_OCI_SECRET_KEY?.trim();
+const getPrimaryUrl = () => {
+  const configuredUrl = process.env.REFERENCE_API_URL?.trim();
+  if (!configuredUrl) throw new Error('Reference service is not configured.');
+  return configuredUrl;
+};
 
 export const CLEAN_BOOK_MAPPINGS: Mapping[] = [
   { source_pattern: '[Medicalstudyzone.com] Pathoma 2023 PDF', canonical_name: 'Pathoma', edition: '2023', page_offset: 0, show_extracted_text: true },
@@ -146,6 +149,7 @@ const readBookReferenceMappings = async () => {
 };
 
 async function executeSearchRequest(targetUrl: string, query: string, topK: number) {
+  if (!OCI_SECRET_KEY) throw new Error('Reference signing key is not configured.');
   const timestamp = (Date.now() / 1000).toString();
   const bodyPayload = JSON.stringify({ query, top_k: Math.min(topK, 20) });
   const message = timestamp + bodyPayload;
@@ -169,16 +173,9 @@ export const fetchReferenceChunks = async (query: string, topK = 5) => {
       try {
         const res = await executeSearchRequest(primaryUrl, query, topK);
         if (res.ok) return res;
-        console.warn(`Primary reference fetch status ${res.status}. Falling back to OCI...`);
+        console.warn(`Primary reference fetch status ${res.status}.`);
       } catch (err) {
-        console.warn(`Primary reference fetch error (tunnel may be down):`, err, 'Falling back to OCI...');
-      }
-      try {
-        const res = await executeSearchRequest(FALLBACK_REFERENCE_URL, query, topK);
-        if (res.ok) return res;
-        console.error(`Fallback reference fetch also failed with status ${res.status}.`);
-      } catch (err) {
-        console.error(`Fallback reference fetch error (OCI unreachable):`, err);
+        console.warn(`Primary reference fetch error:`, err);
       }
       return null;
     })(),
@@ -194,8 +191,9 @@ export const fetchReferenceChunks = async (query: string, topK = 5) => {
     if (webhookUrl) {
       fetch(webhookUrl, { method: 'POST' }).catch(() => {});
     }
-    const detail = refRes ? await refRes.text().catch(() => 'Unknown') : 'Both primary and fallback servers unreachable';
-    throw new Error(`Reference service is currently unavailable. Please try again later. (${refRes?.status || 'NETWORK_FAILURE'}: ${detail})`);
+    const detail = refRes ? await refRes.text().catch(() => 'Unknown') : 'Reference service did not respond';
+    console.error('Reference service unavailable:', refRes?.status || 'NETWORK_FAILURE', detail);
+    throw new Error('Reference service is currently unavailable. Please try again later.');
   }
 
   const data = await refRes.json();

@@ -52,7 +52,8 @@ const PracticalPage = () => {
   });
 
   const userInstituteCode = profile?.institute_code || profile?.institute || 'smbbmc';
-  const userYear = profile?.year || profile?.current_year || 1;
+  const rawYear = String(profile?.year || profile?.current_year || '1');
+  const userYear = parseInt(rawYear.replace(/\D/g, ''), 10) || 1;
 
   // 2. Fetch Institutes List for Name Lookup
   const { data: institutesList = [] } = useQuery({

@@ -129,7 +129,8 @@ Rules:
 
     if (!response.ok) {
       const detail = await response.text();
-      return res.status(response.status).json({ error: `Groq summary error: ${response.status}`, detail });
+      console.error('Reference summary provider error:', response.status, detail);
+      return res.status(502).json({ error: 'Reference summary is temporarily unavailable.' });
     }
 
     const data = await response.json();

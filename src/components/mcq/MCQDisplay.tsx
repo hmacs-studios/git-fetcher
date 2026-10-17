@@ -7,7 +7,7 @@ import {
   BookmarkCheck, Crown, LogOut, AlertTriangle, MoreVertical, Flag, BotOff,
   Moon, Sun, Zap, Sparkles, BookOpen, ChevronLeft, Loader2, Star, Award,
   TrendingUp, Brain, Target, Shield, ShieldAlert, ShieldCheck, Trash2, Menu, Lock, RotateCcw, WifiOff,
-  ThumbsUp, ThumbsDown, MessageCircle, ChevronDown, ChevronUp
+  ThumbsUp, ThumbsDown, MessageCircle, ChevronDown, ChevronUp, Vibrate, Eye
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/hooks/use-toast';
@@ -171,48 +171,37 @@ const ModalContent = ({ children, className = '', ...props }) => (
   </DialogPrimitive.Portal>
 );
 
-const MenuModalContent = ({ children }) => (
-  <DialogPrimitive.Portal>
-    <DialogPrimitive.Overlay className="fixed inset-0 z-[200] bg-black/30 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:duration-150 data-[state=open]:duration-150" />
-    <DialogPrimitive.Content
-      className="fixed right-3 top-[calc(env(safe-area-inset-top)+3.75rem)] z-[201] max-h-[calc(100dvh-env(safe-area-inset-top)-4.5rem)] w-[calc(100%-1.5rem)] max-w-[400px] origin-top-right overflow-y-auto outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 data-[state=closed]:duration-150 data-[state=open]:duration-180"
-    >
-      {children}
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-);
-
 // ─── Modals ────────────────────────────────────────────────────────────────────
 
 const MCQSettingsModal = ({
   isOpen, onClose, onExit,
   quickSubmit, toggleQuickSubmit,
   soundEnabled, toggleSound,
+  hapticsEnabled, toggleHaptics,
   aiPopupsDisabled, toggleAiPopups,
-  onReport, isPremium, theme, setTheme, onReset, downloadSubject, downloadChapter
+  onReport, isPremium, theme, setTheme, onReset,
+  revealAllAnswers, toggleRevealAllAnswers,
+  downloadSubject, downloadChapter
 }) => {
   const { status: offlineStatus } = useOfflineChapterStatus(downloadChapter?.id);
 
   return (
-    <DialogPrimitive.Root open={isOpen} onOpenChange={onClose}>
-      <MenuModalContent>
-        {/* Solid card — no bg-background (CSS var can be transparent) */}
-        <div className="bg-white dark:bg-zinc-900 border-2 border-primary/20 rounded-3xl overflow-hidden shadow-2xl">
-        <div className="p-6 pb-0">
-          <DialogPrimitive.Title className="flex items-center gap-2 mb-1">
+    <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <SheetContent side="bottom" className="mx-auto flex max-h-[88dvh] flex-col rounded-t-[2rem] border-x border-t border-primary/20 bg-background/95 p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] backdrop-blur-2xl sm:max-w-lg z-[300]" overlayClassName="z-[300]">
+        <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />
+        <SheetHeader className="text-left sm:text-left">
+          <SheetTitle className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shrink-0">
               <Zap className="w-4 h-4 text-white" />
             </div>
             <span className="text-xl font-black italic uppercase tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-              Quiz Settings
+              Pause
             </span>
-          </DialogPrimitive.Title>
-          <DialogPrimitive.Description className="text-sm text-zinc-500 dark:text-zinc-400 pl-10">
-            Customize your quiz experience
-          </DialogPrimitive.Description>
-        </div>
+          </SheetTitle>
+          <SheetDescription className="text-sm">Customize your quiz experience</SheetDescription>
+        </SheetHeader>
 
-        <div className="p-6 pt-4 space-y-3">
+        <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-y-auto pb-2 pr-0.5">
           {downloadSubject && downloadChapter && (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <div className="min-w-0">
@@ -271,6 +260,38 @@ const MCQSettingsModal = ({
             <Switch checked={soundEnabled} onCheckedChange={toggleSound} className="data-[state=checked]:bg-violet-500 shrink-0" />
           </div>
 
+          {/* Haptics */}
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shrink-0">
+                <Vibrate className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Haptics</p>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">{hapticsEnabled ? 'ENABLED' : 'DISABLED'}</p>
+              </div>
+            </div>
+            <Switch checked={hapticsEnabled} onCheckedChange={toggleHaptics} className="data-[state=checked]:bg-emerald-500 shrink-0" />
+          </div>
+
+          {/* Reveal All Answers (premium) */}
+          {isPremium && (
+            <div className="flex items-center justify-between p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center shadow-lg shrink-0">
+                  <Eye className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Reveal All Answers</p>
+                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">
+                    {revealAllAnswers ? 'ON — answers shown, no cloud sync' : 'OFF — hide answers'}
+                  </p>
+                </div>
+              </div>
+              <Switch checked={revealAllAnswers} onCheckedChange={toggleRevealAllAnswers} className="data-[state=checked]:bg-yellow-500 shrink-0" />
+            </div>
+          )}
+
           {/* Theme Toggle */}
           <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-500/10 border border-zinc-500/20">
             <div className="flex items-center gap-3">
@@ -282,24 +303,23 @@ const MCQSettingsModal = ({
                 <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">{theme === 'dark' ? 'ON' : 'OFF'}</p>
               </div>
             </div>
-            <Switch checked={theme === 'dark'} onCheckedChange={(checked) => setTheme(checked ? 'dark' : 'light')} className="data-[state=checked]:bg-zinc-800" />
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 pt-2">
-            <Button onClick={onReset} variant="outline" className="w-full rounded-2xl h-12 border-2 border-orange-200 dark:border-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950 font-bold uppercase text-xs tracking-widest">
-              <Trash2 className="w-4 h-4 mr-2" /> Reset Session
-            </Button>
-            <Button onClick={onReport} variant="outline" className="w-full rounded-2xl h-12 border-2 border-red-300 dark:border-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 font-bold uppercase text-xs tracking-widest">
-              <Flag className="w-4 h-4 mr-2" /> Report Question
-            </Button>
-            <Button onClick={onExit} className="w-full rounded-2xl h-12 font-black uppercase text-xs tracking-widest bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white">
-              <LogOut className="w-4 h-4 mr-2" /> Leave Session
-            </Button>
-          </div>
+            <Switch checked={theme === 'dark'} onCheckedChange={(checked) => { setTheme(checked ? 'dark' : 'light'); triggerHaptic(12); }} className="data-[state=checked]:bg-zinc-800" />
           </div>
         </div>
-      </MenuModalContent>
-    </DialogPrimitive.Root>
+
+        <div className="grid grid-cols-1 gap-3 pt-3">
+          <Button onClick={onReset} variant="outline" className="w-full rounded-2xl h-12 border-2 border-orange-200 dark:border-orange-900/30 text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950 font-bold uppercase text-xs tracking-widest">
+            <Trash2 className="w-4 h-4 mr-2" /> Reset Session
+          </Button>
+          <Button onClick={onReport} variant="outline" className="w-full rounded-2xl h-12 border-2 border-red-300 dark:border-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950 font-bold uppercase text-xs tracking-widest">
+            <Flag className="w-4 h-4 mr-2" /> Report Question
+          </Button>
+          <Button onClick={onExit} className="w-full rounded-2xl h-12 font-black uppercase text-xs tracking-widest bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white">
+            <LogOut className="w-4 h-4 mr-2" /> Leave Session
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 };
 
@@ -1067,6 +1087,30 @@ export const MCQDisplay = ({
   const stableAnswerSelectRef = useRef((answer: string) => {
     answerSelectImplementationRef.current(answer);
   });
+  // Hardware/browser back: close the active modal first instead of springing the exit-confirmation.
+  const closeTopmostOverlayRef = useRef<() => boolean>(() => false);
+  closeTopmostOverlayRef.current = () => {
+    if (isChatbotOpen) { setIsChatbotOpen(false); return true; }
+    if (isUnconfirmedModalOpen) { setIsUnconfirmedModalOpen(false); return true; }
+    if (isReferenceModalOpen) { setIsReferenceModalOpen(false); return true; }
+    if (showUpgradeModal) { setShowUpgradeModal(false); return true; }
+    if (showLeaveModal) { setShowLeaveModal(false); return true; }
+    if (showReportModal) { setShowReportModal(false); return true; }
+    if (showSettingsModal) { setShowSettingsModal(false); return true; }
+    if (isDrawerOpen) { setIsDrawerOpen(false); return true; }
+    return false;
+  };
+  useEffect(() => {
+    const onPopState = () => {
+      if (closeTopmostOverlayRef.current()) {
+        // Cancel the history pop so the SPA stays put while a modal is open.
+        try { window.history.pushState(window.history.state, '', window.location.href); } catch { /* ignore */ }
+      }
+      // No overlay open: let the normal back navigation happen (progress is autosaved).
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
   const [isOnline, setIsOnline] = useState(() => {
     if (typeof navigator === 'undefined') return true;
     return navigator.onLine;
@@ -1084,6 +1128,14 @@ export const MCQDisplay = ({
   });
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('mcqSoundDisabled') === 'false';
+    return false;
+  });
+  const [hapticsEnabled, setHapticsEnabled] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('mcqHapticsDisabled') !== 'true';
+    return true;
+  });
+  const [revealAllAnswers, setRevealAllAnswers] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('mcqRevealAllAnswers') === 'true';
     return false;
   });
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -1127,6 +1179,14 @@ export const MCQDisplay = ({
   const userPlanForChatbot = profile?.plan?.toLowerCase() || cachedUserPlan || 'free';
   const isPremium = true;
   const canUseAiSummary = true;
+  const canRevealAllAnswers = userPlanForChatbot === 'premium';
+
+  useEffect(() => {
+    if (!canRevealAllAnswers && revealAllAnswers) {
+      setRevealAllAnswers(false);
+      try { localStorage.removeItem('mcqRevealAllAnswers'); } catch { /* ignore */ }
+    }
+  }, [canRevealAllAnswers, revealAllAnswers]);
   const isSubjectFreeUnlimited = downloadSubject?.free_unlimited_access === true;
 
   const currentMCQ = mcqs[currentQuestionIndex];
@@ -1199,7 +1259,8 @@ export const MCQDisplay = ({
 
   const handleAnswerSelect = (answer: string) => {
     if (showExplanation) return;
-    triggerHaptic(10);
+    if (revealAllAnswers) return;
+    if (hapticsEnabled) triggerHaptic(10);
     hasUserInteractedRef.current = true;
     setSelectedAnswer(answer);
     if (effectiveQuickSubmit) setTimeout(() => handleSubmitAnswer(false, answer), 150);
@@ -1222,7 +1283,7 @@ export const MCQDisplay = ({
       }
 
       let reservedSubmissionCount = dailySubmissionsCount;
-      if (userPlanForChatbot === 'free' && !subjectIsFreeUnlimited) {
+      if (!revealAllAnswers && userPlanForChatbot === 'free' && !subjectIsFreeUnlimited) {
         const reservation = reserveLocalMCQAttempt(
           user.id,
           dailySubmissionsCount,
@@ -1253,6 +1314,10 @@ export const MCQDisplay = ({
         if (isCorrect && !timeUp) playCorrectSound();
         else playIncorrectSound();
       }
+      if (hapticsEnabled) {
+        if (isCorrect && !timeUp) void triggerHaptic([15, 30, 15]);
+        else void triggerHaptic([50, 70, 50]);
+      }
       if (isCorrect && !timeUp) setScore(prev => prev + 1);
       setAnsweredQuestions(prev => ({ ...prev, [currentMCQ.id]: { selectedAnswer: answer || 'No answer (time up)' } }));
       const answerRow = {
@@ -1275,6 +1340,8 @@ export const MCQDisplay = ({
       });
 
       setShowExplanation(true);
+
+      if (revealAllAnswers) return;
 
       const answeredMcqId = currentMCQ.id;
       void (async () => {
@@ -2272,17 +2339,26 @@ export const MCQDisplay = ({
 
             {/* Options */}
             <div className="flex-1 space-y-2.5 px-3 py-4 sm:px-6">
+              {revealAllAnswers && (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-3 py-2">
+                  <Eye className="h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                  <p className="text-[11px] font-bold text-yellow-700 dark:text-yellow-300">
+                    Reveal mode is ON — answers are shown and progress won't be saved to the cloud.
+                  </p>
+                </div>
+              )}
               <p className="mb-3 px-1 text-xs font-bold uppercase tracking-[0.1em] text-muted-foreground">Select your answer</p>
               {currentMCQ?.shuffledOptions.map((option, index) => {
-                const isSelected = selectedAnswer === option;
+const isSelected = selectedAnswer === option;
                 const isCorrect = option === currentMCQ.correct_answer;
+                const revealActive = showExplanation || revealAllAnswers;
                 let state: 'default' | 'selected' | 'correct' | 'incorrect' = 'default';
-                if (showExplanation) {
+
+                if (revealActive) {
                   if (isSelected && isCorrect) state = 'correct';
                   else if (isSelected && !isCorrect) state = 'incorrect';
                   else if (isCorrect) state = 'correct';
                 } else if (isSelected) state = 'selected';
-
                 const optionAiExplanation = optionExplanations[option];
 
                 return (
@@ -2438,6 +2514,17 @@ export const MCQDisplay = ({
                 <>Next<TrendingUp className="w-4 h-4 ml-2" /></>
               )}
             </Button>
+          ) : revealAllAnswers ? (
+            <Button
+              onClick={() => { setSelectedAnswer(null); handleNextQuestion(); }}
+              className="h-12 flex-1 rounded-xl bg-primary font-black shadow-md shadow-primary/15 hover:bg-primary/90"
+            >
+              {currentQuestionIndex === totalQuestions - 1 ? (
+                <>Finish<Award className="w-4 h-4 ml-2" /></>
+              ) : (
+                <>Next<TrendingUp className="w-4 h-4 ml-2" /></>
+              )}
+            </Button>
           ) : (
             !effectiveQuickSubmit && (
               <Button
@@ -2485,7 +2572,30 @@ export const MCQDisplay = ({
           toast({ title: newVal ? "🤖 AI Popups Disabled" : "🤖 AI Popups Enabled" });
         }}
         onReport={() => { setShowSettingsModal(false); setShowReportModal(true); }}
-        isPremium={isPremium}
+        isPremium={canRevealAllAnswers}
+        hapticsEnabled={hapticsEnabled}
+        toggleHaptics={() => {
+          const newVal = !hapticsEnabled;
+          setHapticsEnabled(newVal);
+          localStorage.setItem('mcqHapticsDisabled', String(!newVal));
+          triggerHaptic(15);
+          toast({ title: newVal ? "📳 Haptics ON" : "🚫 Haptics OFF" });
+        }}
+        revealAllAnswers={revealAllAnswers}
+        toggleRevealAllAnswers={() => {
+          const newVal = !revealAllAnswers;
+          setRevealAllAnswers(newVal);
+          localStorage.setItem('mcqRevealAllAnswers', String(newVal));
+          if (newVal) {
+            setSelectedAnswer(null);
+            setShowExplanation(false);
+          }
+          triggerHaptic(15);
+          toast({
+            title: newVal ? "👁️ All Answers Revealed" : "🙈 Answers Hidden",
+            description: newVal ? "Progress stays local while reveal mode is on." : "Normal progress sync resumed.",
+          });
+        }}
         theme={theme}
         setTheme={setTheme}
         downloadSubject={downloadSubject}

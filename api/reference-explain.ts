@@ -130,7 +130,8 @@ Rules:
 
     if (!response.ok) {
       const detail = await response.text();
-      return res.status(response.status).json({ error: `Groq explain error: ${response.status}`, detail });
+      console.error('Reference explanation provider error:', response.status, detail);
+      return res.status(502).json({ error: 'Reference explanation is temporarily unavailable.' });
     }
 
     const data = await response.json();
