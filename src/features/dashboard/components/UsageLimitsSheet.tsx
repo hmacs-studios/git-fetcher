@@ -47,8 +47,9 @@ export function UsageLimitsSheet({ open, onOpenChange, userId, rawUserPlan, user
           ? { ai: [100, 3000], references: [100, 3000], explains: [100, 3000] }
           : { ai: [5, 15], references: [5, 10], explains: [2, 10] };
       const features = ['study-chat', 'reference', 'reference-explain', 'analytics-plan'];
-      const [policyResult, dailyResults, monthlyResults, dailyFlp, monthlyFlp, dailyCards, monthlyCards] = await Promise.all([
+      const [policyResult, overrideResult, dailyResults, monthlyResults, dailyFlp, monthlyFlp, dailyCards, monthlyCards] = await Promise.all([
         (supabase.from('ai_feature_policies') as any).select('feature, daily_requests, monthly_requests, cooldown_days').eq('plan', rawUserPlan).in('feature', [...features, 'titration-flashcards']),
+        (supabase.from('ai_user_overrides') as any).select('feature, daily_requests, monthly_requests, cooldown_days, expires_at').eq('user_id', userId),
         Promise.all(features.map(feature => (supabase.from('ai_usage_events') as any).select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('feature', feature).in('status', ['success', 'fallback']).gte('created_at', dayStart))),
         Promise.all(features.map(feature => (supabase.from('ai_usage_events') as any).select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('feature', feature).in('status', ['success', 'fallback']).gte('created_at', monthStart))),
         (supabase.from('flp_user_attempts') as any).select('id', { count: 'exact', head: true }).eq('user_id', userId).gte('completed_at', dayStart),
@@ -57,13 +58,19 @@ export function UsageLimitsSheet({ open, onOpenChange, userId, rawUserPlan, user
         (supabase.from('ai_usage_events') as any).select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('feature', 'titration-flashcards').in('status', ['success', 'fallback']).gte('created_at', monthStart),
       ]);
       const policyMap = Object.fromEntries((policyResult.data || []).map((policy: any) => [policy.feature, policy]));
+      (overrideResult.data || [])
+        .filter((override: any) => !override.expires_at || new Date(override.expires_at).getTime() > now.getTime())
+        .forEach((override: any) => {
+          policyMap[override.feature] = { ...(policyMap[override.feature] || {}), ...Object.fromEntries(Object.entries(override).filter(([, value]) => value != null)) };
+        });
       const getLimit = (feature: string, period: 'daily' | 'monthly', fallback: number) => Number(policyMap[feature]?.[period === 'daily' ? 'daily_requests' : 'monthly_requests'] ?? fallback);
+      const chatDailyLimit = Math.max(rawUserPlan === 'premium' ? 500 : rawUserPlan === 'iconic' ? 100 : 0, getLimit('study-chat', 'daily', fallbacks.ai[0]));
       const analysisCooldown = Math.max(1, Number(policyMap['analytics-plan']?.cooldown_days || (rawUserPlan === 'premium' ? 1 : rawUserPlan === 'iconic' ? 3 : 7)));
       return {
         daily: { ai: dailyResults[0].count || 0, references: dailyResults[1].count || 0, explains: dailyResults[2].count || 0, analysis: dailyResults[3].count || 0, flp: dailyFlp.count || 0, flashcards: dailyCards.count || 0 },
         monthly: { ai: monthlyResults[0].count || 0, references: monthlyResults[1].count || 0, explains: monthlyResults[2].count || 0, analysis: monthlyResults[3].count || 0, flp: monthlyFlp.count || 0, flashcards: monthlyCards.count || 0 },
         limits: {
-          ai: { daily: getLimit('study-chat', 'daily', fallbacks.ai[0]), monthly: getLimit('study-chat', 'monthly', fallbacks.ai[1]) },
+          ai: { daily: chatDailyLimit, monthly: getLimit('study-chat', 'monthly', fallbacks.ai[1]) },
           references: { daily: getLimit('reference', 'daily', fallbacks.references[0]), monthly: getLimit('reference', 'monthly', fallbacks.references[1]) },
           explains: { daily: getLimit('reference-explain', 'daily', fallbacks.explains[0]), monthly: getLimit('reference-explain', 'monthly', fallbacks.explains[1]) },
           analysis: { daily: 1, monthly: Math.max(1, Math.floor(30 / analysisCooldown)), cooldownDays: analysisCooldown },
@@ -95,7 +102,7 @@ export function UsageLimitsSheet({ open, onOpenChange, userId, rawUserPlan, user
         <SheetHeader className="mx-auto w-full max-w-lg text-left">
           <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25"><Gauge className="h-6 w-6" /></div>
           <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Account usage</p>
-          <SheetTitle className="text-2xl font-extrabold tracking-tight brand-syne">Usage Limits</SheetTitle>
+          <SheetTitle className="text-2xl font-extrabold tracking-tight brand-display">Usage Limits</SheetTitle>
           <SheetDescription>Track AI, references, explanations, and revision usage.</SheetDescription>
         </SheetHeader>
         <div className="mx-auto mt-5 flex min-h-0 w-full max-w-lg flex-1 flex-col space-y-4">

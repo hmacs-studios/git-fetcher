@@ -109,13 +109,13 @@ const SEQSubjectSelectionPage = () => {
   return (
     <MCQPageLayout backTo="/dashboard" showHeader={true} showBackButton={true}>
       <SelectionBackdrop active={Boolean(selectedSubject)} accent="amber" />
-      <Seo title="SEQ Practice" description="Practice Short Essay Questions for your medical exams with Medmacs App." canonical="https://medmacs.app/seqs" />
+      <Seo title="SEQ Practice" description="Practice Short Essay Questions for your medical exams with Medmacs." canonical="https://medmacs.app/seqs" />
 
       <div className="relative z-10 mx-auto w-full max-w-2xl px-4 sm:px-0">
         <div className="py-5">
           <p className="text-[10px] font-bold uppercase tracking-[0.25em] text-amber-600/90 dark:text-amber-500/90">SEQ Practice</p>
-          <h2 className="font-['Syne'] mt-1.5 text-2xl font-bold uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]">
-            Select <span className="text-amber-600 dark:text-amber-500">Subject</span>
+          <h2 className="font-['Bricolage_Grotesque'] mt-1.5 text-2xl font-bold uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]">
+            Select <span className="text-amber-600 dark:text-amber-400">Subject</span>
           </h2>
         </div>
 
@@ -176,7 +176,7 @@ const SEQSubjectSelectionPage = () => {
 
           <footer className="py-6 text-center">
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/40">
-              © 2026 Medmacs App
+              © 2026 Medmacs
             </p>
           </footer>
         </div>

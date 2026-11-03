@@ -54,7 +54,12 @@ const validateJwt = value => {
   }
 };
 
-const supabaseUrl = cleanSecret(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL) || 'https://pxjvltgarzvoptdfdkxq.supabase.co';
+const expectedSupabaseUrl = 'https://ssmmquedryomwxccaqqb.supabase.co';
+const supabaseUrl = (cleanSecret(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL) || expectedSupabaseUrl).replace(/\/+$/, '');
+if (supabaseUrl !== expectedSupabaseUrl) {
+  console.error('SUPABASE_URL must point to the Medmacs Supabase project.');
+  process.exit(1);
+}
 const serviceRoleKey = cleanSecret(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 if (!serviceRoleKey) {

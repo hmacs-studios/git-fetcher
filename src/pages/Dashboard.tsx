@@ -18,9 +18,9 @@ import Seo from '@/components/Seo';
 import AppTransitionScreen from '@/components/AppTransitionScreen';
 
 import VersionGuard from '@/components/VersionControl';
-import { initializeOtaUpdates } from '@/services/otaUpdateService';
 import { isSpecializedTestCode } from '@/utils/institutes';
-import { getProfileCompletion } from '@/utils/profileCompletion';
+import { getProfileCompletion, getProfileFieldsCompletion } from '@/utils/profileCompletion';
+import { getEffectivePlan } from '@/utils/subscription';
 import { useCachedImage } from '@/hooks/useCachedImage';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -33,6 +33,7 @@ import { DASHBOARD_APP_VERSION } from '@/features/dashboard/constants';
 import { getDashboardGreeting } from '@/features/dashboard/dashboardService';
 import { useDashboardData } from '@/features/dashboard/hooks/useDashboardData';
 import { useDashboardAnalyticsPlan } from '@/features/dashboard/hooks/useDashboardAnalyticsPlan';
+import { useAllFeatureAccess } from '@/hooks/useFeatureAccess';
 import { HomeDashboardTab } from '@/features/dashboard/components/HomeDashboardTab';
 import { DashboardHeader } from '@/features/dashboard/components/DashboardHeader';
 import {
@@ -41,9 +42,6 @@ import {
 } from '@/features/dashboard/components/DashboardBottomNavigation';
 import { UsageLimitsSheet } from '@/features/dashboard/components/UsageLimitsSheet';
 import type { DashboardAnnouncement, DashboardTabId } from '@/features/dashboard/types';
-import { prepareMCQQuiz } from '@/features/mcq/quizBootstrap';
-import { fetchSubjects } from '@/utils/mcqData';
-import { isConstrainedConnection } from '@/utils/networkQuality';
 
 const lazyWithRetry = <T extends { default: ComponentType<any> }>(
   loader: () => Promise<T>,
@@ -90,13 +88,19 @@ const LazyTabFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-2xl border border-border/30 bg-muted/30 ${className}`} />
 );
 
+const DEFAULT_DASHBOARD_COMPONENTS = {
+  mcqs: true,
+  past_papers: true,
+  seqs: false,
+  viva: false,
+};
+
 const Dashboard = () => {
   const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState<DashboardTabId>('home');
-  const [isNavigating, setIsNavigating] = useState(true);
   const [showWhatsNew, setShowWhatsNew] = useState(false);
   const [showTermOfDay, setShowTermOfDay] = useState(false);
   const [showCaseOfDay, setShowCaseOfDay] = useState(false);
@@ -113,11 +117,10 @@ const Dashboard = () => {
   const {
     profileQuery: {
       data: profile,
-      isLoading: profileLoading,
       isFetchedAfterMount: profileFetchedAfterMount,
       isError: profileFetchFailed,
+      refetch: refetchProfile,
     },
-    profileVerifiedFromServer,
     userStatsQuery: { data: userStats, isLoading: userStatsLoading },
     announcementsQuery: { data: announcements, isLoading: announcementsLoading },
     whatsNewQuery: { data: whatsNewContent, isLoading: whatsNewLoading },
@@ -125,7 +128,7 @@ const Dashboard = () => {
     readAnnouncementsQuery: { data: readAnnouncements },
     termQuery: { data: termOfDay, isLoading: termLoading },
     caseQuery: { data: caseOfDay, isLoading: caseLoading },
-    instituteQuery: { data: instituteData, isLoading: instituteDataLoading },
+    instituteQuery: { data: dashboardBootstrap, isSuccess: instituteFetched },
     dashboardAnnouncementsQuery: { data: dashboardAnnouncements = [] },
     dashboardPromotionsQuery: { data: dashboardPromotions = [] },
     hmacsProductsQuery: { data: hmacsProducts = [] },
@@ -136,11 +139,31 @@ const Dashboard = () => {
     loadWhatsNew: showWhatsNew,
     loadSecondaryData,
   });
-
-  const waitingForLiveProfileConfirmation = !!user && !profile && !profileFetchFailed && (
-    profileLoading || !profileFetchedAfterMount || !profileVerifiedFromServer
+  const instituteData = dashboardBootstrap?.institute;
+  useAllFeatureAccess(
+    profile?.institute || 'global',
+    profile?.plan || 'free',
+    Boolean(user && profile),
   );
-  const dashboardComponents = instituteData?.dashboard_components || { mcqs: true, seqs: false, viva: false };
+
+  const profileFieldsComplete = getProfileFieldsCompletion(profile).complete;
+  const instituteNeedsSetup = Boolean(
+    profile
+    && profileFieldsComplete
+    && !isOfflineMode
+    && instituteFetched
+    && !getProfileCompletion(profile, instituteData ? [instituteData] : []).complete,
+  );
+  const profileEntryPending = Boolean(user && !profileFetchedAfterMount && !profileFetchFailed);
+  const profileNeedsSetup = Boolean(
+    user
+    && profileFetchedAfterMount
+    && !profileFetchFailed
+    && !isOfflineMode
+    && (!profileFieldsComplete || instituteNeedsSetup),
+  );
+  const profileReady = Boolean(profileFetchedAfterMount && !profileFetchFailed && profileFieldsComplete && !instituteNeedsSetup);
+  const dashboardComponents = dashboardBootstrap?.components || DEFAULT_DASHBOARD_COMPONENTS;
 
 
   useEffect(() => {
@@ -182,37 +205,9 @@ const Dashboard = () => {
   }, []);
 
   useEffect(() => {
-    if (isNavigating || !user) return;
+    if (!profileReady || !user) return;
     setLoadSecondaryData(true);
-  }, [isNavigating, user]);
-
-  useEffect(() => {
-    if (isNavigating || !user?.id || isOfflineMode || isConstrainedConnection()) return;
-
-    const prefetchTimer = window.setTimeout(() => {
-      void fetchSubjects().catch(() => undefined);
-
-      try {
-        const savedSessions = JSON.parse(
-          localStorage.getItem('mcq_saved_sessions') || '[]',
-        ) as Array<{ chapterId?: string; timestamp?: string }>;
-        const likelySession = savedSessions
-          .filter(session => session.chapterId)
-          .sort((a, b) => String(b.timestamp || '').localeCompare(String(a.timestamp || '')))[0];
-
-        if (likelySession?.chapterId) {
-          void prepareMCQQuiz({
-            chapterId: likelySession.chapterId,
-            userId: user.id,
-          }).catch(() => undefined);
-        }
-      } catch {
-        // Prefetch is opportunistic and must never delay the dashboard.
-      }
-    }, 750);
-
-    return () => window.clearTimeout(prefetchTimer);
-  }, [isNavigating, isOfflineMode, user?.id]);
+  }, [profileReady, user]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -227,54 +222,13 @@ const Dashboard = () => {
   }, [activeTab, announcements, markAnnouncementsRead, user]);
 
   useEffect(() => {
-    if (authLoading || waitingForLiveProfileConfirmation) { setIsNavigating(true); return; }
-    if (!user) { setIsNavigating(false); return; }
+    if (!authLoading && profileNeedsSetup) navigate('/setup', { replace: true });
+  }, [authLoading, profileNeedsSetup, navigate]);
 
-    if (profileFetchFailed) {
-      const canUseCachedProfile = typeof navigator !== 'undefined' && !navigator.onLine && !!profile;
-      if (canUseCachedProfile) {
-        setIsNavigating(false);
-        return;
-      }
-      navigate('/setup', { replace: true });
-      return;
-    }
-
-    if (profile === undefined) {
-      setIsNavigating(true);
-      return;
-    }
-
-    if (!profileVerifiedFromServer && !profile) {
-      setIsNavigating(true);
-      return;
-    }
-
-    if (!profile) {
-      navigate('/setup', { replace: true });
-      return;
-    }
-
-    if (profile?.institute && instituteDataLoading) {
-      setIsNavigating(true);
-      return;
-    }
-
-    const isOnline = typeof navigator === 'undefined' || navigator.onLine;
-    if (isOnline && profile?.institute && !instituteData && !isSpecializedTestCode(profile.institute)) {
-      navigate('/setup', { replace: true });
-      return;
-    }
-
-    if (!getProfileCompletion(profile, instituteData ? [instituteData] : []).complete) {
-      navigate('/setup', { replace: true });
-      return;
-    }
-
-    setIsNavigating(false);
-  }, [authLoading, waitingForLiveProfileConfirmation, profileFetchFailed, profileVerifiedFromServer, user, profile, instituteData, instituteDataLoading, navigate]);
-
-  const quickActions = useMemo(getQuickActions, []);
+  const quickActions = useMemo(
+    () => getQuickActions(dashboardComponents),
+    [dashboardComponents],
+  );
   const personalizationActions = useMemo(getPersonalizationActions, []);
   const premiumPerks = useMemo(getPremiumActions, []);
   const isSpecializedTest = isSpecializedTestCode(profile?.institute);
@@ -285,7 +239,7 @@ const Dashboard = () => {
     () => getDashboardGreeting(displayName, user?.id),
     [displayName, user?.id],
   );
-  const rawUserPlan = profile?.plan?.toLowerCase() || 'free';
+  const rawUserPlan = getEffectivePlan(profile?.plan, profile?.plan_expiry_date);
   const userPlanDisplayName = rawUserPlan.charAt(0).toUpperCase() + rawUserPlan.slice(1) + ' Plan';
   const analyticsPlanCadence = rawUserPlan === 'premium'
     ? 'every day'
@@ -306,23 +260,26 @@ const Dashboard = () => {
     loadAnalyticsPlan: activeTab === 'analytics',
     toast,
   });
-  const dashboardAnnouncement = dashboardAnnouncements[0] || null;
   const cachedAvatarUrl = useCachedImage(profile?.avatar_url);
 
-  useEffect(() => {
-    initializeOtaUpdates();
-  }, []);
-
-  if (isNavigating || authLoading || waitingForLiveProfileConfirmation) {
+  if (authLoading || !user || profileEntryPending || profileNeedsSetup) {
     return <AppTransitionScreen />;
   }
 
-
-  if (!user) {
-    return <AppTransitionScreen />;
+  if (profileFetchFailed || !profile) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center text-foreground">
+        <p className="max-w-sm text-sm font-medium">
+          {isOfflineMode ? 'Connect to the internet to load your profile.' : 'Your profile could not be loaded. Please try again.'}
+        </p>
+        <button type="button" onClick={() => void refetchProfile()} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-primary-foreground">
+          Try again
+        </button>
+      </div>
+    );
   }
 
-
+  const isActivationMode = !userStatsLoading && (userStats?.totalQuestions || 0) === 0;
   const unreadCount = (announcements && readAnnouncements)
     ? announcements.filter(a => !readAnnouncements.includes(a.id)).length : 0;
 
@@ -431,7 +388,7 @@ const Dashboard = () => {
             caseLoading={caseLoading}
             onOpenCase={() => setShowCaseOfDay(true)}
             instituteModules={instituteModules}
-            dashboardAnnouncement={dashboardAnnouncement}
+            dashboardAnnouncements={dashboardAnnouncements}
             onOpenAnnouncement={setSelectedDashboardAnnouncement}
             instituteData={instituteData}
             personalizationActions={personalizationActions}
@@ -439,22 +396,21 @@ const Dashboard = () => {
             promotions={dashboardPromotions}
             hmacsProducts={hmacsProducts}
             onOpenCollaborate={() => setShowCollaborateModal(true)}
+            activationMode={isActivationMode}
           />
         );
     }
   };
 
   return (
-    <div className={`dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background dark:from-background dark:via-background dark:to-background ${activeTab === 'discover' ? 'pb-0' : 'pb-28'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
-      <Seo title="Dashboard" description="Your personalized Medmacs App dashboard." canonical="https://medmacs.app/dashboard" />
+    <div data-dashboard-page className={`dashboard-modern-font relative min-h-screen w-full overflow-x-hidden bg-gradient-to-b from-primary/10 via-background to-background dark:from-background dark:via-background dark:to-background ${activeTab === 'discover' ? 'pb-0' : 'pb-28'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+      <Seo title="Dashboard" description="Your personalized Medmacs dashboard." canonical="https://medmacs.app/dashboard" />
       <VersionGuard />
 
       {/* Minimal top bar with announcement icon */}
       {activeTab !== 'discover' && (
         <DashboardHeader
-          displayName={displayName}
-          userPlanDisplayName={userPlanDisplayName}
-          cachedAvatarUrl={cachedAvatarUrl}
+          activeTab={activeTab}
           unreadCount={unreadCount}
           onOpenAnnouncements={() => navigate('/announcements')}
         />
@@ -499,11 +455,13 @@ const Dashboard = () => {
       )}
 
       {/* Premium bottom tab bar — active tab expands with label */}
-      <DashboardBottomNavigation
-        activeTab={activeTab}
-        items={tabs}
-        onTabChange={setActiveTab}
-      />
+      {!isActivationMode && (
+        <DashboardBottomNavigation
+          activeTab={activeTab}
+          items={tabs}
+          onTabChange={setActiveTab}
+        />
+      )}
 
       <UsageLimitsSheet
         open={showUsageLimits}

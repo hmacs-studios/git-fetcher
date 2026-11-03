@@ -53,17 +53,10 @@ const Devices = () => {
       </div>
 
       <header className="fixed inset-x-0 top-0 z-50 border-b border-border/30 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
-        <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="h-9 w-9 rounded-xl p-0" aria-label="Go back">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-xl bg-primary/10 text-primary">
-              <MonitorSmartphone className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-black">Devices & Sessions</span>
-          </div>
-          <div className="h-9 w-9" />
+        <div className="mx-auto grid h-14 max-w-3xl grid-cols-[1fr_auto_1fr] items-center px-4">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Devices & Sessions</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 

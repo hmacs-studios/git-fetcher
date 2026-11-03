@@ -44,7 +44,7 @@ For the purposes of this Privacy Policy:
     for election of directors or other managing authority.
 
 * **Company** (referred to as either "the Company", "We", "Us" or "Our" in this
-    Agreement) refers to Medmacs.app, L13, KDA Flats, Sector 5E Surjani
+    Agreement) refers to Medmacs, L13, KDA Flats, Sector 5E Surjani
     Town, Karachi.
 
 * **Cookies** are small files that are placed on Your computer, mobile device or
@@ -75,8 +75,8 @@ For the purposes of this Privacy Policy:
     use of the Service or from the Service infrastructure itself (for example,
     the duration of a page visit).
 
-* **Website** refers to Medistics.app, accessible from
-    [medistics.app](medistics.app)
+* **Website** refers to Medmacs, accessible from
+    [Medmacs](https://medmacs.app)
 
 * **You** means the individual accessing or using the Service, or the company,
     or other legal entity on behalf of which such individual is accessing or
@@ -365,7 +365,7 @@ Your Personal Data, We cannot guarantee its absolute security.
 
 ## Analytics, Tracking, and Automated Data Collection
 
-By accessing or using Medmacs.app, analytics and campaign measurement scripts execute automatically to analyze usage patterns, monitor service performance, and track campaign attribution (including Google and Meta measurement tools). These scripts collect standard web diagnostics, performance statistics, and device telemetry to ensure a seamless learning experience and improve our platform functionality.
+By accessing or using Medmacs, analytics and campaign measurement scripts execute automatically to analyze usage patterns, monitor service performance, and track campaign attribution (including Google and Meta measurement tools). These scripts collect standard web diagnostics, performance statistics, and device telemetry to ensure a seamless learning experience and improve our platform functionality.
 
 ## Children's Privacy
 
@@ -424,27 +424,15 @@ If you have any questions about this Privacy Policy, You can contact us:
         <div className="h-dvh w-full overflow-y-auto bg-background">
             <Seo
             title="Privacy Policy"
-            description="Understand how Medmacs App collects, uses, and protects your personal data in our comprehensive Privacy Policy."
+            description="Understand how Medmacs collects, uses, and protects your personal data in our comprehensive Privacy Policy."
             canonical="https://medmacs.app/privacypolicy"
             />
 
             <div className="sticky top-0 z-50 border-b border-border/60 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-                <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-                    <button
-                        type="button"
-                        onClick={() => window.history.back()}
-                        aria-label="Go back"
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-                    >
-                        <ArrowLeft className="h-4 w-4" />
-                    </button>
-
-                    <div className="flex items-center gap-3">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs Logo" className="h-8 w-8 object-contain" />
-                        <span className="text-lg font-bold text-foreground">Medmacs</span>
-                    </div>
-
-                    <div className="h-9 w-9" />
+                <div className="mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">Privacy Policy</h1>
+                    <div aria-hidden="true" />
                 </div>
             </div>
 

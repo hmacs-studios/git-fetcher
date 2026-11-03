@@ -132,7 +132,7 @@ export const aiApiStream = async (
       if (event === 'delta') handlers.onDelta?.(data.text || '');
       if (event === 'done') result = data;
       if (event === 'error') {
-        const err = new AiApiError(data.error || 'AI request failed.', response.status, data.code, data);
+        const err = new AiApiError(data.error || 'AI request failed.', Number(data.status || response.status), data.code, data);
         if (err.status === 403 || err.status === 429) _onAiLimitError?.(err);
         throw err;
       }

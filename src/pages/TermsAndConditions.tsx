@@ -10,9 +10,9 @@ const TermsAndConditions = () => {
 
 **Last updated:** June 12, 2025
 
-These Terms and Conditions outline the rules and regulations for the use of Medmacs.app's Website, an MCAT Learning platform integrated with Artificial Intelligence.
+These Terms and Conditions outline the rules and regulations for the use of the Medmacs website, a Medical Learning platform integrated with Artificial Intelligence.
 
-By accessing this website we assume you accept these terms and conditions. Do not continue to use Medmacs.app if you do not agree to take all of the terms and conditions stated on this page.
+By accessing this website we assume you accept these terms and conditions. Do not continue to use Medmacs if you do not agree to take all of the terms and conditions stated on this page.
 
 ---
 
@@ -37,7 +37,7 @@ For the purposes of these Terms and Conditions:
     for election of directors or other managing authority.
 
 * **Company** (referred to as either "the Company", "We", "Us" or "Our" in this
-    Agreement) refers to Medmacs.app, L13, KDA Flats, Sector 5E Surjani
+    Agreement) refers to Medmacs, L13, KDA Flats, Sector 5E Surjani
     Town, Karachi.
 
 * **Country** refers to: Pakistan
@@ -45,7 +45,7 @@ For the purposes of these Terms and Conditions:
 * **Device** means any device that can access the Service such as a computer, a
     cellphone or a digital tablet.
 
-* **Service** refers to the Website, specifically the MCAT Learning platform integrated with Artificial Intelligence.
+* **Service** refers to the Website, specifically the Medical Learning platform integrated with Artificial Intelligence.
 
 * **Service Provider** means any natural or legal person who processes the data
     on behalf of the Company. It refers to third-party companies or
@@ -57,8 +57,8 @@ For the purposes of these Terms and Conditions:
     network website through which a User can log in or create an account to
     use the Service.
 
-* **Website** refers to Medmacs.app, accessible from
-    [Medmacs.app](Medmacs.app)
+* **Website** refers to Medmacs, accessible from
+    [Medmacs](https://medmacs.app)
 
 * **You** means the individual accessing or using the Service, or the company,
     or other legal entity on behalf of which such individual is accessing or
@@ -68,20 +68,20 @@ For the purposes of these Terms and Conditions:
 
 ## Cookies
 
-We employ the use of cookies and automated tracking technologies. By accessing or using Medmacs.app, you automatically agree to the execution of automated analytics, user activity tracking, campaign measurement scripts, and telemetry data collection as outlined in our Privacy Policy.
+We employ the use of cookies and automated tracking technologies. By accessing or using Medmacs, you automatically agree to the execution of automated analytics, user activity tracking, campaign measurement scripts, and telemetry data collection as outlined in our Privacy Policy.
 
 ---
 
 ## License
 
-Unless otherwise stated, Medmacs.app and/or its licensors own the intellectual property rights for all material on Medmacs.app. All intellectual property rights are reserved. You may access this from Medmacs.app for your own personal use subject to restrictions set in these terms and conditions.
+Unless otherwise stated, Medmacs and/or its licensors own the intellectual property rights for all material on Medmacs. All intellectual property rights are reserved. You may access this from Medmacs for your own personal use subject to restrictions set in these terms and conditions.
 
 You must not:
 
-* Republish material from Medmacs.app
-* Sell, rent or sub-license material from Medmacs.app
-* Reproduce, duplicate or copy material from Medmacs.app
-* Redistribute content from Medmacs.app
+* Republish material from Medmacs
+* Sell, rent or sub-license material from Medmacs
+* Reproduce, duplicate or copy material from Medmacs
+* Redistribute content from Medmacs
 
 Specifically, regarding the AI integration:
 
@@ -97,7 +97,7 @@ The following organizations may link to our Website without prior written approv
 * Government agencies
 * Search engines
 
-Anyone can link to Medmacs.app. The link must not be in any way deceptive and must not falsely imply sponsorship, endorsement or approval of the linking party and its products or services, and must fit within the context of the linking party’s site.
+Anyone can link to Medmacs. The link must not be in any way deceptive and must not falsely imply sponsorship, endorsement or approval of the linking party and its products or services, and must fit within the context of the linking party’s site.
 
 ---
 
@@ -130,7 +130,7 @@ To the maximum extent permitted by applicable law, we exclude all representation
 
 The limitations and prohibitions of liability set in this Section and elsewhere in this disclaimer: (a) are subject to the preceding paragraph; and (b) govern all liabilities arising under the disclaimer, including liabilities arising in contract, in tort and for breach of statutory duty.
 
-While we strive to provide accurate and up-to-date information through Medmacs.app, we do not warrant the completeness or accuracy of the information presented on this website. We also do not guarantee that the website will remain available or that the material on the website will be kept up to date. The MCAT learning content and AI-generated insights are provided for educational purposes only and should not be considered a substitute for professional advice or comprehensive study resources. Your reliance on any information provided by the Service is solely at your own risk. As long as the website and the information and services on the website are provided free of charge, we will not be liable for any loss or damage of any nature.
+While we strive to provide accurate and up-to-date information through Medmacs, we do not warrant the completeness or accuracy of the information presented on this website. We also do not guarantee that the website will remain available or that the material on the website will be kept up to date. The Medical learning content and AI-generated insights are provided for educational purposes only and should not be considered a substitute for professional advice or comprehensive study resources. Your reliance on any information provided by the Service is solely at your own risk. As long as the website and the information and services on the website are provided free of charge, we will not be liable for any loss or damage of any nature.
 
 ---
 
@@ -148,27 +148,15 @@ If you have any questions about these Terms and Conditions, you can contact us:
     <div className="h-dvh w-full overflow-y-auto bg-background">
       <Seo
         title="Terms and Conditions"
-        description="Read the terms and conditions for using Medmacs App services. Your agreement to these terms is required for usage."
-        canonical="https://Medmacs.app/terms"
+        description="Read the terms and conditions for using Medmacs services. Your agreement to these terms is required for usage."
+        canonical="https://medmacs.app/terms"
       />
 
       <div className="sticky top-0 z-50 border-b border-border/60 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            aria-label="Go back"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          <div className="flex items-center gap-3">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs Logo" className="h-8 w-8 object-contain" />
-            <span className="text-lg font-bold text-foreground">Medmacs</span>
-          </div>
-
-          <div className="h-9 w-9" />
+        <div className="mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Terms</h1>
+          <div aria-hidden="true" />
         </div>
       </div>
 

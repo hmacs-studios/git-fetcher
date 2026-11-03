@@ -1,0 +1,1 @@
+const a=()=>{if(typeof navigator>"u")return!1;const e=navigator.connection;return(e==null?void 0:e.saveData)===!0||(e==null?void 0:e.effectiveType)==="slow-2g"||(e==null?void 0:e.effectiveType)==="2g"};export{a as i};

@@ -4,88 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Trophy, Crown, Medal, Award, Users, ArrowRight, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-
-interface LeaderboardEntry {
-  id: string;
-  user_id: string;
-  username: string;
-  total_score: number;
-  accuracy: number;
-  total_questions: number;
-}
+import { fetchLeaderboardEntries, leaderboardQueryKey, type LeaderboardEntry } from '@/services/leaderboard';
 
 export const LeaderboardPreview = () => {
   const { user } = useAuth();
 
-  const { data: leaderboardData, isLoading } = useQuery({
-    queryKey: ['leaderboard-preview'],
-    queryFn: async () => {
-      try {
-        const [answersResult, profilesResult] = await Promise.all([
-          supabase
-            .from('user_answers')
-            .select('user_id, is_correct, time_taken, created_at'),
-          supabase
-            .from('profiles')
-            .select('id, username, full_name'),
-        ]);
-
-        const { data: userAnswers, error: answersError } = answersResult;
-        const { data: profiles, error: profilesError } = profilesResult;
-        
-        if (answersError || profilesError) return { allEntries: [], topUsers: [] };
-
-        const userStats: Record<string, any> = {};
-        
-        userAnswers?.forEach(answer => {
-          if (!userStats[answer.user_id]) {
-            userStats[answer.user_id] = { totalQuestions: 0, correctAnswers: 0, totalTime: 0, answers: [] };
-          }
-          userStats[answer.user_id].totalQuestions++;
-          if (answer.is_correct) userStats[answer.user_id].correctAnswers++;
-          userStats[answer.user_id].totalTime += answer.time_taken || 0;
-          userStats[answer.user_id].answers.push(answer);
-        });
-
-        const allEntries = profiles
-          ?.filter(profile => userStats[profile.id]?.totalQuestions > 0)
-          .map(profile => {
-            const stats = userStats[profile.id];
-            let currentStreak = 0, bestStreak = 0;
-            stats.answers
-              .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-              .forEach((answer: any) => {
-                if (answer.is_correct) { currentStreak++; bestStreak = Math.max(bestStreak, currentStreak); }
-                else { currentStreak = 0; }
-              });
-
-            const accuracy = stats.totalQuestions > 0 ? Math.round((stats.correctAnswers / stats.totalQuestions) * 100) : 0;
-            const averageTime = stats.totalQuestions > 0 ? Math.round(stats.totalTime / stats.totalQuestions) : 0;
-            const totalScore = stats.correctAnswers * 10 + bestStreak * 5 + accuracy + Math.max(0, 60 - averageTime);
-
-            return {
-              id: profile.id, user_id: profile.id,
-              username: profile.username || profile.full_name || 'Anonymous',
-              total_score: totalScore, accuracy, total_questions: stats.totalQuestions,
-            };
-          }) || [];
-
-        const sorted = allEntries.sort((a, b) => b.total_score - a.total_score);
-        return { allEntries: sorted, topUsers: sorted.slice(0, 10) };
-      } catch (error) { return { allEntries: [], topUsers: [] }; }
-    },
-    staleTime: 1000 * 60 * 5,
+  const { data: leaderboardData = [], isLoading } = useQuery<LeaderboardEntry[]>({
+    queryKey: leaderboardQueryKey(user?.id, 'pakistan', 'all-time'),
+    queryFn: () => fetchLeaderboardEntries('pakistan', 'all-time', user?.id),
+    enabled: !!user?.id,
+    staleTime: 1000 * 60,
   });
 
-  const topUsers = leaderboardData?.topUsers || [];
-  const allEntries = leaderboardData?.allEntries || [];
-
-  // Calculate user rank from ALL entries, not just top 10
-  const userRankIndex = allEntries.findIndex(u => u.user_id === user?.id);
-  const userRank = userRankIndex >= 0 ? userRankIndex + 1 : -1;
-  const currentUserData = userRank > 0 ? allEntries[userRankIndex] : null;
+  const topUsers = leaderboardData.filter(entry => entry.rank_position <= 10);
+  const currentUserData = leaderboardData.find(entry => entry.user_id === user?.id);
+  const userRank = currentUserData?.rank_position ?? -1;
 
   const getRankIcon = (rank: number) => {
     switch (rank) {

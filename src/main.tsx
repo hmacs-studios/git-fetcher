@@ -41,10 +41,15 @@ if ("serviceWorker" in navigator && import.meta.env.PROD && !Capacitor.isNativeP
       .register("/service-worker.js")
       .catch(err => console.log("SW failed", err));
   });
-} else if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations()
-    .then(registrations => registrations.forEach(registration => registration.unregister()))
-    .catch(err => console.log("SW cleanup failed", err));
+} else {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations()
+      .then(registrations => registrations.forEach(registration => registration.unregister()))
+      .catch(err => console.log("SW cleanup failed", err));
+  }
+  if (typeof window !== "undefined" && "caches" in window) {
+    caches.keys().then(keys => keys.forEach(key => caches.delete(key))).catch(() => {});
+  }
 }
 
 const rootElement = document.getElementById("root");

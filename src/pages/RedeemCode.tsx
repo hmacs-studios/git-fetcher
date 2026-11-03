@@ -86,17 +86,10 @@ const RedeemCode = () => {
                 ref={headerRef}
                 className={`fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-2xl border-b border-border/30 pt-[env(safe-area-inset-top)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
             >
-                <div className="container mx-auto grid h-14 max-w-7xl grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center px-5">
-                    <Link to="/dashboard" className="justify-self-start">
-                        <Button variant="ghost" size="sm" className="w-9 h-9 p-0 text-muted-foreground hover:text-foreground hover:bg-accent">
-                            <ArrowLeft className="h-5 w-5 text-foreground" />
-                        </Button>
-                    </Link>
-                    <div className="flex min-w-0 items-center justify-center gap-2 justify-self-center">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-6 w-6 shrink-0 object-contain" />
-                        <span className="whitespace-nowrap text-base font-black leading-none text-foreground">Redeem Code</span>
-                    </div>
-                    <div className="h-9 w-9 justify-self-end" aria-hidden="true" />
+                <div className="container mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">Redeem Code</h1>
+                    <div aria-hidden="true" />
                 </div>
             </div>
 

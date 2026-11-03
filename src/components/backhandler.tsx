@@ -34,13 +34,20 @@ export default function BackButtonHandler() {
                 return;
             }
 
+            // Close an open sheet before handling dashboard navigation or app exit.
+            if (document.querySelector('[data-feature-lock-modal="true"]')) {
+                window.dispatchEvent(new CustomEvent("close-feature-lock-modal"));
+                return;
+            }
+
             // 1. Check for open modals/sheets: Usage Limits, Case of the Day, Term of the Day
             const usageLimitsSheet = document.querySelector('[data-usage-limits-sheet="true"]');
             const caseOfDayModal = document.querySelector('[data-case-of-day-modal="true"]');
             const termOfDayModal = document.querySelector('[data-term-of-day-modal="true"]');
             const savedReelsModal = document.querySelector('[data-saved-reels-modal="true"]');
+            const dashboardAnnouncementModal = document.querySelector('[data-dashboard-announcement-modal="true"]');
 
-            if (usageLimitsSheet || caseOfDayModal || termOfDayModal || savedReelsModal) {
+            if (usageLimitsSheet || caseOfDayModal || termOfDayModal || savedReelsModal || dashboardAnnouncementModal) {
                 if (savedReelsModal) {
                     window.dispatchEvent(new CustomEvent("close-saved-reels"));
                 } else {
@@ -72,6 +79,33 @@ export default function BackButtonHandler() {
 
             // FLP result pages: go to dashboard (not back to the finished test)
             if (pathname === "/flp-result" || pathname.startsWith("/results/flp/")) {
+                nav("/dashboard");
+                return;
+            }
+
+            // Past Papers pages: hardcoded navigation based on page
+            if (pathname.startsWith("/past-papers")) {
+                // /past-papers/chapter/:subjectId -> /past-papers (chapter selection -> subject selection)
+                const chapterMatch = pathname.match(/^\/past-papers\/chapter\/([^/]+)$/);
+                if (chapterMatch) {
+                    nav("/past-papers");
+                    return;
+                }
+
+                // /past-papers/settings/:subjectId/:chapterId -> /past-papers/chapter/:subjectId (settings -> chapter selection)
+                const settingsMatch = pathname.match(/^\/past-papers\/settings\/([^/]+)\/([^/]+)$/);
+                if (settingsMatch) {
+                    const subjectId = settingsMatch[1];
+                    nav(`/past-papers/chapter/${subjectId}`);
+                    return;
+                }
+
+                // /past-papers (subject selection) -> dashboard
+                if (pathname === "/past-papers") {
+                    nav("/dashboard");
+                    return;
+                }
+
                 nav("/dashboard");
                 return;
             }

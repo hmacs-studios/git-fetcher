@@ -1,34 +1,17 @@
-import { useQuery } from '@tanstack/react-query';
 import { Sparkles, Target, ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import Seo from '@/components/Seo';
 import { Card, CardContent } from '@/components/ui/card';
 import { MistakeBook } from '@/components/dashboard/personalization/MistakeBook';
 import { usePersonalizationData } from '@/components/dashboard/personalization/usePersonalizationData';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 
 const MistakeBookPage = () => {
-  const { user } = useAuth();
   const { groupedSubjects, wrongAttempts, isLoading } = usePersonalizationData();
-
-  const { data: profile } = useQuery({
-    queryKey: ['profile-plan', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const isPremium = true;
   const chapterCount = groupedSubjects.reduce((total, subject) => total + subject.chapters.length, 0);
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background text-foreground overflow-hidden">
-      <Seo title="Mistake Book" description="Review and correct your wrong MCQ attempts on Medmacs App." canonical="https://medmacs.app/mistake-book" />
+      <Seo title="Mistake Book" description="Review and correct your wrong MCQ attempts on Medmacs." canonical="https://medmacs.app/mistake-book" />
 
       {/* Mesh Background Blurs */}
       <div className="pointer-events-none absolute inset-0 bg-mesh opacity-90" />
@@ -36,23 +19,10 @@ const MistakeBookPage = () => {
 
       {/* Glassmorphic Header */}
       <header className="shrink-0 relative z-30 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+10px)] backdrop-blur-2xl border-b border-border/60 bg-background/88 animate-fade-in">
-        <div className="mx-auto flex items-center justify-between gap-3 max-w-4xl">
-          <Link
-            to="/dashboard"
-            aria-label="Back to dashboard"
-            className="flex shrink-0 items-center justify-center bg-muted text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground h-11 w-11 rounded-2xl border border-border/40"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-
-          <div className="min-w-0 text-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Medmacs</p>
-            <h1 className="truncate text-base font-black tracking-tight uppercase italic">Mistake Book</h1>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-center bg-primary/10 text-primary h-11 w-11 rounded-2xl">
-            <Target className="h-5 w-5" />
-          </div>
+        <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Mistake Book</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 
@@ -124,11 +94,11 @@ const MistakeBookPage = () => {
               </CardContent>
             </Card>
           ) : (
-            <MistakeBook subjects={groupedSubjects} isPremium={isPremium} />
+            <MistakeBook subjects={groupedSubjects} />
           )}
 
           <p className="pb-4 pt-8 text-center text-[10px] text-muted-foreground tracking-widest">
-            © 2026 Medmacs App • All rights reserved
+            © 2026 Medmacs • All rights reserved
           </p>
         </div>
       </main>

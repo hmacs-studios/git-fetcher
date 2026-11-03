@@ -524,11 +524,11 @@ export const RapidFireGame = ({ roomData, userId, onGameComplete }: RapidFireGam
         <div className="flex min-w-0 items-center gap-2">
           <img
             src="/favicon.png"
-            alt="Medmacs.app"
+            alt="Medmacs"
             className="h-7 w-7 shrink-0 rounded-lg"
           />
           <div className="min-w-0 leading-none">
-            <p className="truncate text-sm font-black tracking-tight text-foreground">Medmacs.app</p>
+            <p className="truncate text-sm font-black tracking-tight text-foreground">Medmacs</p>
             <p className="mt-0.5 text-[10px] font-black uppercase tracking-widest text-primary">Rapid Fire</p>
           </div>
         </div>

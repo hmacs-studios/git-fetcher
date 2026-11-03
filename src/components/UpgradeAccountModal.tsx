@@ -81,7 +81,7 @@ const UpgradeAccountModal: React.FC<UpgradeAccountModalProps> = ({ isOpen, onClo
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />
         <SheetHeader className="text-center sm:text-center">
           <Crown className="w-12 h-12 mx-auto text-yellow-500 dark:text-yellow-400 mb-3" />
-          <SheetTitle className="text-2xl font-bold brand-syne">{title || 'Usage Limit Reached'}</SheetTitle>
+          <SheetTitle className="text-2xl font-bold brand-display">{title || 'Usage Limit Reached'}</SheetTitle>
           <SheetDescription className="mt-2">
             {description || `You've used all your ${periodLabel.toLowerCase()} AI quota.${isPlanRestriction ? ' This feature requires a plan upgrade.' : ' Upgrade to keep using AI features without limits.'}`}
           </SheetDescription>

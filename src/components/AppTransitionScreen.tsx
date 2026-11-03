@@ -1,4 +1,6 @@
-const AppTransitionScreen = () => {
+import React from 'react';
+
+const AppTransitionScreen: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[999] flex flex-col items-center justify-center overflow-hidden bg-background text-foreground transition-colors duration-300">
       <div className="relative flex items-center justify-center w-[140px] h-[140px] bg-card rounded-full shadow-lg border border-border animate-[pulse_2s_cubic-bezier(0.4,0,0.6,1)_infinite]">

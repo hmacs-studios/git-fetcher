@@ -339,7 +339,7 @@ const InternshipApplication = () => {
     <div className="min-h-screen w-full bg-background relative overflow-x-hidden">
       <Seo
         title="Join Medmacs Program"
-        description="Apply for the Medmacs App Summer Internship Program 2025. Gain hands-on experience in a dynamic EdTech environment."
+        description="Apply for the Medmacs Summer Internship Program 2025. Gain hands-on experience in a dynamic EdTech environment."
         canonical="https://medmacs.app/summerinternship2025"
       />
 
@@ -353,21 +353,11 @@ const InternshipApplication = () => {
       </div>
 
       {/* Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-[#020617]/40 backdrop-blur-2xl border-b border-white/5 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-        <div className="container mx-auto px-4 lg:px-8 py-3 flex justify-between items-center max-w-7xl">
-          <Link to="/dashboard" className="flex items-center space-x-2 text-white/50 hover:text-[#2dd4bf] transition-colors group">
-            <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="hidden sm:inline font-bold text-sm">Dashboard</span>
-          </Link>
-
-          <div className="flex items-center space-x-3">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" className="w-8 h-8 object-contain animate-float" />
-            <span className="text-xl font-black tracking-tight text-white hidden sm:inline uppercase italic">Collaborate</span>
-            <span className="text-sm font-black text-white sm:hidden italic">Collaborate</span>
-          </div>
-
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <PlanBadge plan={profile?.plan} />
+      <div className="fixed top-0 left-0 right-0 z-50 bg-[#020617]/40 backdrop-blur-2xl border-b border-white/5 pt-[env(safe-area-inset-top)]">
+        <div className="container mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 lg:px-8">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-white">Collaborate</h1>
+          <div className="justify-self-end">
             <ProfileDropdown />
           </div>
         </div>
@@ -660,7 +650,7 @@ const InternshipApplication = () => {
       <footer className="py-12 border-t border-white/5 mt-12 bg-white/[0.01] relative z-10">
         <div className="container mx-auto px-4 text-center">
           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-white/5 mb-3">A Project by Hmacs Studios</p>
-          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/10">© 2026 Medmacs App all rights reserved</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-white/10">© 2026 Medmacs all rights reserved</p>
         </div>
       </footer>
 

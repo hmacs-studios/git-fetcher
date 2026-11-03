@@ -67,15 +67,10 @@ const PurchaseHistory = () => {
       <div
         className={`fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-2xl border-b border-border/30 pt-[env(safe-area-inset-top)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
       >
-        <div className="container mx-auto px-5 h-14 flex justify-between items-center max-w-7xl">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-9 h-9 p-0">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex items-center gap-2">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" className="w-7 h-7" />
-            <span className="text-base font-black">Purchase History</span>
-          </div>
-          <div className="w-9" />
+        <div className="container mx-auto grid h-14 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Purchase History</h1>
+          <div aria-hidden="true" />
         </div>
       </div>
 

@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { XCircle, BellRing, Calendar, ScrollText, ArrowLeft } from 'lucide-react';
+import { XCircle, BellRing, Calendar, ScrollText } from 'lucide-react';
+import { AnnouncementImage } from '@/components/announcements/AnnouncementImage';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,7 +10,6 @@ import Seo from '@/components/Seo';
 
 const AnnouncementsPage = () => {
     const { user } = useAuth();
-    const navigate = useNavigate();
     const queryClient = useQueryClient();
 
     type ProfileType = { role: string; plan: string } | null;
@@ -125,35 +123,23 @@ const AnnouncementsPage = () => {
     }, [user?.id, announcements, readAnnouncements]);
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+        <div className="min-h-screen bg-background text-foreground">
             <Seo
                 title="Announcements - GitFetcher"
                 description="Latest news, updates, and release notes from GitFetcher."
             />
 
             {/* Header with Back Button */}
-            <div className="sticky top-0 z-30 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 pt-[env(safe-area-inset-top)]">
-                <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate('/dashboard')}
-                            className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
-                            aria-label="Back to Dashboard"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                        </Button>
-                        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                            <BellRing className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                            Announcements
-                        </h1>
-                    </div>
+            <div className="sticky top-0 z-30 border-b border-border/60 bg-background/92 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
+                <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-4 py-4">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">Announcements</h1>
+                    <div aria-hidden="true" />
                 </div>
             </div>
 
             <div className="max-w-4xl mx-auto px-4 py-8">
-                <p className="text-gray-600 dark:text-gray-400 text-center mb-8">
+                <p className="mb-8 text-center text-muted-foreground">
                     Stay updated with the latest features, releases, and platform updates.
                 </p>
 
@@ -180,39 +166,39 @@ const AnnouncementsPage = () => {
                     )}
 
                     {announcements?.map((announcement) => (
-                        <Card key={announcement.id} className="bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 shadow-md hover:shadow-lg transition-shadow duration-300 animate-fade-in">
+                        <Card key={announcement.id} className="animate-fade-in overflow-hidden border border-border/60 bg-card shadow-sm">
                             <CardHeader>
-                                <CardTitle className="text-gray-900 dark:text-white flex items-center">
-                                    <BellRing className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
-                                    {announcement.title}
-                                </CardTitle>
-                                <CardDescription className="text-gray-600 dark:text-gray-400 flex items-center mt-1">
-                                    <Calendar className="h-4 w-4 mr-1.5 text-gray-500" />
-                                    {new Date(announcement.created_at).toLocaleDateString('en-US', {
-                                        year: 'numeric',
-                                        month: 'long',
-                                        day: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    })}
-                                </CardDescription>
+                                <div className="flex items-start gap-3">
+                                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-primary/25 bg-primary/10 ring-1 ring-background">
+                                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="" className="h-8 w-8 object-contain" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <CardTitle className="break-words text-foreground">{announcement.title}</CardTitle>
+                                        <CardDescription className="mt-1 flex items-center text-muted-foreground">
+                                            <Calendar className="mr-1.5 h-4 w-4 shrink-0" />
+                                            {new Date(announcement.created_at).toLocaleDateString('en-US', {
+                                                year: 'numeric',
+                                                month: 'long',
+                                                day: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </CardDescription>
+                                    </div>
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <p className="text-gray-700 dark:text-gray-300 mb-4 whitespace-pre-wrap">{announcement.content}</p>
+                                <p className="mb-4 whitespace-pre-wrap leading-relaxed text-foreground/85">{announcement.content}</p>
                                 {announcement.media_url && (
-                                    <div className="mt-4 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-700">
+                                    <div className="mt-4">
                                         {announcement.media_url.match(/\.(jpeg|jpg|png|gif|webp)$/i) ? (
-                                            <img
+                                            <AnnouncementImage
                                                 src={announcement.media_url}
                                                 alt="Announcement media"
-                                                className="w-full h-auto object-cover max-h-96"
-                                                onError={(e) => {
-                                                    e.currentTarget.onerror = null;
-                                                    e.currentTarget.src = 'https://placehold.co/600x400/cccccc/333333?text=Image+Not+Available';
-                                                }}
+                                                className="h-auto w-full rounded-xl object-contain"
                                             />
                                         ) : announcement.media_url.match(/\.(mp4|webm|ogg)$/i) ? (
-                                            <video controls className="w-full h-auto max-h-96">
+                                            <video controls className="h-auto w-full rounded-xl">
                                                 <source src={announcement.media_url} type={`video/${announcement.media_url.split('.').pop()}`} />
                                                 Your browser does not support the video tag.
                                             </video>

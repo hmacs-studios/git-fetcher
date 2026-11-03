@@ -77,9 +77,36 @@ const transactionDone = (transaction: IDBTransaction) =>
 const ACTIVE_SCOPE_KEY = 'medmacs_mcq_active_scope';
 const SUBJECTS_CACHE_PREFIX = 'medmacs_mcq_subjects_cache:';
 const CHAPTERS_CACHE_PREFIX = 'medmacs_mcq_chapters_cache:';
+const DIRECTORY_VERSION_KEY = 'medmacs_mcq_directory_version';
+const DIRECTORY_VERSION = 'fcps_anatomy_chapter_names_20261025';
+
+const ensureCurrentDirectoryCache = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const scope = localStorage.getItem(ACTIVE_SCOPE_KEY) || '';
+    if (!scope.endsWith(':fcps_part_1:medicine_allied')
+      && !scope.endsWith(':fcps_part_1:specialized:medicine_allied')) return;
+    const versionKey = `${DIRECTORY_VERSION_KEY}:${scope}`;
+    if (localStorage.getItem(versionKey) === DIRECTORY_VERSION) return;
+
+    localStorage.removeItem(`${SUBJECTS_CACHE_PREFIX}${scope}`);
+    localStorage.removeItem('medmacs_mcq_subjects_cache');
+    const chapterPrefix = `${CHAPTERS_CACHE_PREFIX}${scope}:`;
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(chapterPrefix)) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+    localStorage.setItem(versionKey, DIRECTORY_VERSION);
+  } catch {
+    // A blocked localStorage should not prevent loading the directory online.
+  }
+};
 
 export const getStoredScopeKey = (): string => {
   if (typeof window === 'undefined') return '';
+  ensureCurrentDirectoryCache();
   return localStorage.getItem(ACTIVE_SCOPE_KEY) || '';
 };
 

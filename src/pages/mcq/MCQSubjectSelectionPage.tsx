@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import Seo from '@/components/Seo';
 import { getOfflineChapterSummaries, subscribeOfflineChapterChanges } from '@/utils/offlineChapters';
+import DoctorMascotLoader from '@/components/loader/DoctorMascotLoader';
 import {
   Sheet,
   SheetContent,
@@ -200,7 +201,7 @@ const MCQSubjectSelectionPage = () => {
   }, [user?.id, authLoading, profileLoading, loadUserStats]);
 
   const handleContinue = () => {
-    if (selectedSubject && (!isOfflineMode || offlineSubjectIds.has(selectedSubject.id))) {
+    if (selectedSubject && selectedSubject.chapter_count !== 0 && (!isOfflineMode || offlineSubjectIds.has(selectedSubject.id))) {
       navigate(`/mcqs/chapter/${selectedSubject.id}`);
     }
   };
@@ -286,7 +287,7 @@ const MCQSubjectSelectionPage = () => {
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-0">
           <div className="text-center mb-8 px-4">
             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary mb-3 block">Step 1 of 3</span>
-            <h2 className="font-['Syne'] px-1 text-3xl font-black uppercase italic leading-[1.08] tracking-tight text-foreground sm:text-5xl">
+            <h2 className="brand-display px-1 text-3xl font-black uppercase italic leading-[1.08] tracking-tight text-foreground sm:text-5xl">
               Select <span className="text-primary">Subject&nbsp;</span>
             </h2>
             <p className="text-muted-foreground text-sm font-medium mt-3 max-w-lg mx-auto text-center">
@@ -294,16 +295,29 @@ const MCQSubjectSelectionPage = () => {
             </p>
           </div>
           {loading ? (
-            <div className="divide-y divide-border/50 border-y border-border/50">
-              {Array.from({ length: 6 }).map((_, i) => <SubjectRowSkeleton key={i} />)}
+            <div className="py-6 flex flex-col items-center justify-center">
+              <DoctorMascotLoader
+                variant="inline"
+                size="sm"
+                label="Loading subjects..."
+                showSubtext={true}
+              />
             </div>
           ) : subjects.length > 0 ? (
             <div className="divide-y divide-border/50 border-y border-border/50">
               {subjects.map((subject, index) => {
                 const isSelected = selectedSubject?.id === subject.id;
                 const isOfflineUnavailable = isOfflineMode && !offlineSubjectIds.has(subject.id);
+                const isUnavailable = typeof subject.chapter_count === 'number' && subject.chapter_count === 0;
+                const isDisabled = isOfflineUnavailable || isUnavailable;
+
                 const metaLabels = [
-                  subject.free_unlimited_access === true && (
+                  isUnavailable && (
+                    <span key="coming-soon" className="text-[10px] font-bold uppercase tracking-[0.14em] text-muted-foreground/80 dark:text-muted-foreground">
+                      Coming Soon
+                    </span>
+                  ),
+                  !isUnavailable && subject.free_unlimited_access === true && (
                     <span key="free" className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-600 dark:text-emerald-400">
                       Free
                     </span>
@@ -341,11 +355,11 @@ const MCQSubjectSelectionPage = () => {
                         </motion.span>
                       }
                       title={subject.name}
-                      subtitle={subject.description || undefined}
+                      subtitle={isUnavailable ? 'No chapters available yet' : (subject.description || undefined)}
                       selected={isSelected}
-                      disabled={isOfflineUnavailable}
+                      disabled={isDisabled}
                       accentLayoutId="mcq-subject-accent"
-                      onSelect={() => setSelectedSubject(subject)}
+                      onSelect={() => !isDisabled && setSelectedSubject(subject)}
                       meta={metaLabels.length > 0 ? metaLabels : undefined}
                     />
                   </motion.div>

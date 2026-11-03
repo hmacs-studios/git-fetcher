@@ -1,4 +1,4 @@
-import React from 'react';
+import { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Sparkles, ShieldAlert, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,12 +27,20 @@ export function FeatureLockModal({
 }: FeatureLockModalProps) {
   const navigate = useNavigate();
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     onClose();
     if (redirectOnClose) {
       navigate('/dashboard', { replace: true });
     }
-  };
+  }, [onClose, redirectOnClose, navigate]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeOnBack = () => handleClose();
+    window.addEventListener('close-feature-lock-modal', closeOnBack);
+    return () => window.removeEventListener('close-feature-lock-modal', closeOnBack);
+  }, [open, handleClose]);
 
   const handleUpgrade = () => {
     onClose();
@@ -42,6 +50,7 @@ export function FeatureLockModal({
   return (
     <Sheet open={open} onOpenChange={(isOpen) => { if (!isOpen) handleClose(); }}>
       <SheetContent
+        data-feature-lock-modal={open ? 'true' : 'false'}
         side="bottom"
         className="mx-auto max-h-[88dvh] overflow-y-auto rounded-t-[2rem] border-x border-t border-primary/20 bg-background/95 p-6 pb-[calc(2.5rem+env(safe-area-inset-bottom))] backdrop-blur-2xl sm:max-w-lg z-[300]"
         overlayClassName="z-[300]"
@@ -56,7 +65,7 @@ export function FeatureLockModal({
               className="w-20 h-20 object-contain drop-shadow-lg select-none"
             />
           </div>
-          <SheetTitle className="text-2xl font-bold brand-syne tracking-tight">
+          <SheetTitle className="text-2xl font-bold brand-display tracking-tight">
             Unlock {featureTitle}
           </SheetTitle>
           <SheetDescription className="mt-2 text-sm text-muted-foreground leading-relaxed font-medium">

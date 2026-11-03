@@ -111,7 +111,7 @@ export const getInlinePillTheme = (refText: string) => {
   return palette[Math.abs(hash) % palette.length];
 };
 
-const REF_SPLIT_REGEX = /(\[(?:ref|reference|references)?:?\s*[^\]]+\]|\((?:ref|reference|references)?:?\s*(?:Davidson|Guyton|First Aid|Pathoma|Bailey|Snell|Harper|Lippincott|Ten Teachers|BD Chaurasia|Wheater|Katzung|Robbins|Ganong|Harrison|Nelson|Costanzo|BRS|Kaplan)[^)]*?\))/gi;
+const REF_SPLIT_REGEX = /(\[pubmed:\s*[^\]]+\]|\[(?:ref|reference|references)?:?\s*[^\]]+\]|\((?:ref|reference|references)?:?\s*(?:Davidson|Guyton|First Aid|Pathoma|Bailey|Snell|Harper|Lippincott|Ten Teachers|BD Chaurasia|Wheater|Katzung|Robbins|Ganong|Harrison|Nelson|Costanzo|BRS|Kaplan)[^)]*?\))/gi;
 
 const isPillMatch = (str: string): boolean => {
   const trimmed = str.trim();
@@ -139,6 +139,24 @@ export const parseBoldText = (text: string): ReactNode[] => {
   return segments.map((seg, idx) => {
     if (!seg) return null;
 
+    const pubmedToken = seg.match(/^\[pubmed:\s*([^\]]+)\]$/i);
+    if (pubmedToken) {
+      const content = pubmedToken[1];
+      const url = content.match(/(?:^|,\s*)url:\s*"([^"]+)"/i)?.[1] || "";
+      const id = content.match(/(?:^|,\s*)id:\s*"([^"]+)"/i)?.[1] || "";
+      if (!url) return seg;
+      const openExternal = async () => {
+        try {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url });
+        } catch {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      };
+      const title = content.match(/(?:^|,\s*)title:\s*"([^"]+)"/i)?.[1] || `PubMed ${id}`;
+      return <button key={`pubmed-${idx}`} type="button" onClick={openExternal} title={id ? `Open PubMed ${id}` : 'Open PubMed'} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 text-left align-middle text-xs font-semibold leading-snug text-teal-900 shadow-sm transition-colors hover:bg-teal-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-500 dark:border-teal-700 dark:bg-teal-950 dark:text-teal-100 dark:hover:bg-teal-900"><span className="shrink-0 font-bold">PubMed</span><span aria-hidden="true">·</span><span className="min-w-0 break-words">{title}</span><span aria-hidden="true" className="shrink-0">↗</span></button>;
+    }
+
     if (isPillMatch(seg)) {
       let cleanRef = seg.trim();
       let innerContent = cleanRef;
@@ -151,19 +169,12 @@ export const parseBoldText = (text: string): ReactNode[] => {
         innerContent = cleanRef.replace(/^(?:ref|reference|references):\s*/i, '').replace(/\s+/g, ' ').trim();
       }
 
-      const theme = getInlinePillTheme(innerContent);
       return (
         <span
           key={`pill-${idx}`}
-          style={{
-            background: `linear-gradient(180deg, ${theme.bg}77 0%, ${theme.bg}44 60%, ${theme.bg}22 100%)`,
-            color: '#ffffff',
-            borderColor: `${theme.border}99`,
-            boxShadow: `0 2px 5px -1px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1.5px 2px rgba(0,0,0,0.25)`,
-          }}
-          className="inline-flex items-center px-2.5 py-0.5 my-0.5 mx-1 rounded-full border backdrop-blur-sm text-[11px] font-mono font-semibold tracking-tight align-middle select-none transition-all duration-200 transform hover:-translate-y-0.5 active:translate-y-0"
+          className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-teal-300 bg-teal-50 px-2.5 py-1 align-middle text-xs font-semibold leading-snug text-teal-900 shadow-sm dark:border-teal-700 dark:bg-teal-950 dark:text-teal-100"
         >
-          <span className="drop-shadow-[0_1px_1px_rgba(0,0,0,0.7)]">{innerContent}</span>
+          <span className="min-w-0 break-words">{innerContent}</span>
         </span>
       );
     }
@@ -338,7 +349,17 @@ const renderInline = (text: string): ReactNode[] => {
     }
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (linkMatch) {
-      return <a key={i} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="font-medium text-primary underline underline-offset-4 hover:text-primary/80">{linkMatch[1]}</a>;
+      const url = linkMatch[2];
+      const openExternal = async () => {
+        if (!/^https?:\/\//i.test(url)) return;
+        try {
+          const { Browser } = await import('@capacitor/browser');
+          await Browser.open({ url });
+        } catch {
+          window.open(url, '_blank', 'noopener,noreferrer');
+        }
+      };
+      return <button key={i} type="button" onClick={openExternal} className="font-medium text-primary underline underline-offset-4 hover:text-primary/80">{linkMatch[1]}</button>;
     }
     return part;
   });

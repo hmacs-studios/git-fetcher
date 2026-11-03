@@ -2,7 +2,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, Brain, ChevronLeft, ChevronRight, Loader2, Lock, Sparkles, Wand2 } from 'lucide-react';
 import Seo from '@/components/Seo';
 import PageSkeleton from '@/components/skeletons/PageSkeleton';
@@ -16,7 +15,6 @@ import { isAiLimitError } from '@/components/dashboard/personalization/Flashcard
 import { fetchReferenceSnippet } from '@/components/dashboard/personalization/personalizationUtils';
 import { recordGeneratedFlashcards } from '@/components/profile/AchievementBadges';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 import { aiApiJson } from '@/utils/aiApi';
 import { InteractiveFlashcard } from '@/components/dashboard/personalization/InteractiveFlashcard';
 
@@ -145,19 +143,6 @@ const LearnWithAIPage = () => {
   const [flashcardModalOpen, setFlashcardModalOpen] = useState(false);
   const currentCard = flashcards[activeCard];
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile', user?.id, 'learn-ai'],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();
-      if (error) return null;
-      return data;
-    },
-    enabled: !!user?.id,
-  });
-
-  const userPlan = String(profile?.plan || 'free').toLowerCase();
-
   useEffect(() => {
     const loadSubjects = async () => {
       setSubjectsLoading(true);
@@ -257,7 +242,7 @@ const LearnWithAIPage = () => {
 
   const isAllCardsCompleted = flashcards.length > 0 && activeCard >= flashcards.length;
 
-  if (authLoading || profileLoading) return <PageSkeleton />;
+  if (authLoading) return <PageSkeleton />;
 
   if (!user) {
     return (
@@ -280,7 +265,7 @@ const LearnWithAIPage = () => {
 
   return (
     <MCQPageLayout backTo="/dashboard" showHeader showBackButton>
-      <Seo title="Learn with Dr Ahroid" description="Generate AI flashcards from any subject or chapter on Medmacs App." canonical="https://medmacs.app/learn-with-ai" />
+      <Seo title="Learn with Dr Ahroid" description="Generate AI flashcards from any subject or chapter on Medmacs." canonical="https://medmacs.app/learn-with-ai" />
 
       <div className="text-center mb-6 sm:mb-8 animate-fade-in">
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-normal leading-[1.08] text-foreground uppercase italic mb-3">

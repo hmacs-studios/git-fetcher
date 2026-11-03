@@ -9,6 +9,7 @@ import Seo from "@/components/Seo";
 import { motion } from "framer-motion";
 import GoogleSignin from "@/components/GoogleSignin";
 import AppTransitionScreen from "@/components/AppTransitionScreen";
+import { AuthDnaWave } from "@/components/auth/AuthDnaWave";
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -51,7 +52,7 @@ const Login = () => {
     >
       <Seo
         title="Login"
-        description="Log in to your Medmacs App account to access personalized MDCAT preparation tools, MCQs, AI study assistant, and more."
+        description="Log in to your Medmacs account to access personalized Medical preparation tools, MCQs, AI study assistant, and more."
         canonical="https://medmacs.app/login"
       />
 
@@ -82,15 +83,14 @@ const Login = () => {
         >
           {/* Welcome text */}
           <div className="text-center mb-8 flex flex-col items-center justify-center">
-            <h1 className="whitespace-nowrap font-['Syne'] text-[clamp(2rem,8vw,2.55rem)] font-extrabold tracking-[-.055em] flex items-center justify-center">
+            <h1 className="whitespace-nowrap font-['Bricolage_Grotesque'] text-[clamp(2rem,8vw,2.55rem)] font-extrabold tracking-[-.055em] flex items-center justify-center">
               <motion.span
-                className="inline-block bg-[linear-gradient(90deg,#2dd4bf,#0ea5e9,#22d3ee,#2dd4bf)] bg-[length:220%_100%] bg-clip-text text-transparent"
+                className="brand-wordmark inline-block text-slate-950"
                 animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                 transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
               >
                 Medmacs
               </motion.span>
-              <span className="text-slate-950">.app</span>
             </h1>
             <p className="mt-2 font-['Plus_Jakarta_Sans'] text-sm font-bold uppercase tracking-[.22em] text-slate-400 text-center">Welcome back</p>
           </div>
@@ -164,6 +164,7 @@ const Login = () => {
           </div>
         </motion.div>
       </div>
+      <AuthDnaWave />
        <p className="relative z-10 border-t border-slate-200/60 bg-white/30 pb-[max(8px,env(safe-area-inset-bottom))] pt-3 text-center text-xs text-slate-400">
         A project by <span className="font-semibold text-slate-600">HMACS Studios</span>
       </p>

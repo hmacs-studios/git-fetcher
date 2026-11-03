@@ -1,17 +1,31 @@
+import LottiePlayer from '@/components/LottiePlayer';
+import paymentProcessingAnim from '@/assets/animations/Bank.json';
+import paymentSuccessAnim from '@/assets/animations/Payment Success.json';
+import paymentFailAnim from '@/assets/animations/Close.json';
+import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { motion } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, Crown, Zap, Star, Shield, BriefcaseBusiness } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Crown, Zap, Star, Shield, BriefcaseBusiness, RotateCcw, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import Seo from '@/components/Seo';
 import PageSkeleton from '@/components/skeletons/PageSkeleton';
 import { useConsent } from '@/components/consent/ConsentProvider';
 import { trackMetaAddToCart } from '@/utils/metaAppEvents';
 import { trackGoogleAddToCart } from '@/utils/googleAnalytics';
+import {
+    isPlayBillingSupported,
+    getPlayBillingOfferings,
+    findPackageForPlan,
+    purchasePlayBillingPackage,
+    restorePlayBillingPurchases,
+} from '@/services/playBillingService';
 
 interface SupabasePlan {
     id: string;
@@ -47,38 +61,52 @@ interface AiFeaturePolicy {
     daily_requests: number | null;
 }
 
-// Fixed, saturated identity per plan — intentionally constant across light/dark,
-// the way a lab-result card keeps its color coding regardless of the room lighting.
-const planStyles: { [key: string]: { gradient: string; accent: string; icon: any; ring: string } } = {
+interface PlanStyleConfig {
+    border: string;
+    cardBg: string;
+    iconBg: string;
+    icon: React.ReactNode;
+    accentColor: string;
+    checkColor: string;
+    buttonClass: string;
+}
+
+const planStyles: Record<string, PlanStyleConfig> = {
     free: {
-        gradient: 'from-slate-700 via-slate-800 to-slate-950',
-        accent: 'bg-slate-200',
-        icon: <Shield className="w-7 h-7 text-slate-100" />,
-        ring: 'ring-slate-400/40',
-    },
-    premium: {
-        gradient: 'from-teal-700 via-cyan-800 to-slate-950',
-        accent: 'bg-cyan-200',
-        icon: <Star className="w-7 h-7 text-cyan-100" />,
-        ring: 'ring-cyan-300/45',
+        border: 'border-border/80 dark:border-border/60',
+        cardBg: 'bg-card',
+        iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',
+        icon: <Shield className="w-5 h-5" />,
+        accentColor: 'bg-slate-400 dark:bg-slate-500',
+        checkColor: 'text-slate-500 dark:text-slate-400',
+        buttonClass: 'bg-secondary hover:bg-secondary/80 text-secondary-foreground border border-border/50',
     },
     iconic: {
-        gradient: 'from-[#0f766e] via-[#0e7490] to-[#1e3a8a]',
-        accent: 'bg-amber-300',
-        icon: <Crown className="w-7 h-7 text-amber-200" />,
-        ring: 'ring-amber-300/50',
+        border: 'border-2 border-teal-500 dark:border-teal-400',
+        cardBg: 'bg-gradient-to-b from-teal-50/60 via-card to-card dark:from-teal-950/25 dark:via-card dark:to-card',
+        iconBg: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
+        icon: <Crown className="w-5 h-5" />,
+        accentColor: 'bg-teal-500',
+        checkColor: 'text-teal-600 dark:text-teal-400',
+        buttonClass: 'bg-teal-600 hover:bg-teal-700 text-white shadow-md shadow-teal-600/20',
     },
-    pro: {
-        gradient: 'from-emerald-500 via-teal-600 to-cyan-700',
-        accent: 'bg-emerald-200',
-        icon: <Zap className="w-7 h-7 text-emerald-100" />,
-        ring: 'ring-emerald-300/50',
+    premium: {
+        border: 'border border-cyan-500/40 dark:border-cyan-500/30',
+        cardBg: 'bg-gradient-to-b from-cyan-50/40 via-card to-card dark:from-cyan-950/20 dark:via-card dark:to-card',
+        iconBg: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
+        icon: <Star className="w-5 h-5" />,
+        accentColor: 'bg-cyan-500',
+        checkColor: 'text-cyan-600 dark:text-cyan-400',
+        buttonClass: 'bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-600/20',
     },
     executive: {
-        gradient: 'from-slate-950 via-cyan-950 to-teal-900',
-        accent: 'bg-amber-300',
-        icon: <BriefcaseBusiness className="w-7 h-7 text-amber-200" />,
-        ring: 'ring-amber-300/50',
+        border: 'border border-border/80 dark:border-border/60',
+        cardBg: 'bg-card',
+        iconBg: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+        icon: <BriefcaseBusiness className="w-5 h-5" />,
+        accentColor: 'bg-amber-500',
+        checkColor: 'text-amber-600 dark:text-amber-400',
+        buttonClass: 'bg-secondary hover:bg-secondary/80 text-foreground border border-border/60',
     },
 };
 
@@ -102,11 +130,27 @@ const EcgLine = ({ className = '' }: { className?: string }) => (
 
 const Pricing = () => {
     const { user, loading: isAuthLoading } = useAuth();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
+    const { toast } = useToast();
+    const isPlayBilling = isPlayBillingSupported();
+    const [purchasingPlanId, setPurchasingPlanId] = useState<string | null>(null);
+    const [isRestoring, setIsRestoring] = useState(false);
+    const [paymentModalState, setPaymentModalState] = useState<'idle' | 'processing' | 'success' | 'failure'>('idle');
+    const [upgradedPlanName, setUpgradedPlanName] = useState<string>('');
+    const [paymentErrorMessage, setPaymentErrorMessage] = useState<string>('');
     const { measurementAllowed } = useConsent();
     const [isMonthly, setIsMonthly] = useState(true);
     const [activePlanId, setActivePlanId] = useState<string>('free');
     const [headerVisible, setHeaderVisible] = useState(true);
     const lastScrollY = useRef(0);
+
+    const { data: playOfferings } = useQuery({
+        queryKey: ['playBillingOfferings'],
+        queryFn: () => getPlayBillingOfferings(),
+        enabled: isPlayBilling,
+        staleTime: 5 * 60 * 1000,
+    });
 
     useEffect(() => {
         const handleScroll = () => {
@@ -178,9 +222,15 @@ const Pricing = () => {
         const grouped: { [key: string]: GroupedPlan } = {};
         fetchedPlans.forEach((p) => {
             if (!grouped[p.name]) {
+                const displayName = p.name.toLowerCase() === 'iconic' 
+                    ? 'Iconic' 
+                    : p.name.toLowerCase() === 'premium' 
+                    ? 'Premium' 
+                    : p.display_name;
+
                 grouped[p.name] = {
                     name: p.name,
-                    display: p.display_name,
+                    display: displayName,
                     id: p.name,
                     popular: p.is_popular,
                     monthly: {
@@ -281,6 +331,113 @@ const Pricing = () => {
         cardRefs.current[id]?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     };
 
+    const handlePlayPurchase = async (plan: GroupedPlan) => {
+        if (!isPlayBillingSupported()) {
+            toast({
+                title: 'Google Play Store Required',
+                description: 'Google Play Billing is available directly within the Medmacs Android app.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        if (!user) {
+            toast({
+                title: 'Authentication Required',
+                description: 'Please sign in or create an account to upgrade.',
+                variant: 'destructive',
+            });
+            navigate('/login');
+            return;
+        }
+
+        const billingPeriod = isMonthly ? 'monthly' : 'yearly';
+        const pkg = findPackageForPlan(playOfferings ?? null, plan.id, billingPeriod);
+
+        if (!pkg) {
+            toast({
+                title: 'Package Unavailable',
+                description: 'Google Play subscription package is being configured. Please try again shortly.',
+                variant: 'destructive',
+            });
+            return;
+        }
+
+        setUpgradedPlanName(plan.display);
+        setPaymentErrorMessage('');
+        setPaymentModalState('processing');
+        setPurchasingPlanId(plan.id);
+        try {
+            const result = await purchasePlayBillingPackage(pkg, plan.display, billingPeriod);
+            if (result.success) {
+                if (user?.id) {
+                    localStorage.removeItem(`medmacs_profile_cache_${user.id}`);
+                    localStorage.removeItem(`medmacs:mcq-plan:${user.id}`);
+                }
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: ['profile-plan'] }),
+                    queryClient.invalidateQueries({ queryKey: ['dashboard-entry-profile'] }),
+                    queryClient.invalidateQueries({ queryKey: ['mcq-profile-plan'] }),
+                    queryClient.invalidateQueries({ queryKey: ['past-paper-profile-plan'] }),
+                    queryClient.invalidateQueries({ queryKey: ['user-stats'] }),
+                    queryClient.invalidateQueries({ queryKey: ['pricingPlans'] }),
+                ]);
+                await queryClient.refetchQueries({ queryKey: ['profile-plan'] });
+                await queryClient.refetchQueries({ queryKey: ['dashboard-entry-profile'] });
+                setPaymentModalState('success');
+            } else if (result.userCancelled) {
+                // User dismissed the native Google Play bottom sheet
+                setPaymentModalState('idle');
+            } else {
+                setPaymentErrorMessage(result.error || 'Unable to complete purchase via Google Play.');
+                setPaymentModalState('failure');
+            }
+        } catch (err: any) {
+            setPaymentErrorMessage(err?.message || 'Unable to complete transaction.');
+            setPaymentModalState('failure');
+        } finally {
+            setPurchasingPlanId(null);
+        }
+    };
+
+    const handleRestorePurchases = async () => {
+        setIsRestoring(true);
+        try {
+            const res = await restorePlayBillingPurchases();
+            if (res.success && res.hasActiveSubscription) {
+                if (user?.id) {
+                    localStorage.removeItem(`medmacs_profile_cache_${user.id}`);
+                    localStorage.removeItem(`medmacs:mcq-plan:${user.id}`);
+                }
+                await Promise.all([
+                    queryClient.invalidateQueries({ queryKey: ['profile-plan'] }),
+                    queryClient.invalidateQueries({ queryKey: ['dashboard-entry-profile'] }),
+                    queryClient.invalidateQueries({ queryKey: ['mcq-profile-plan'] }),
+                    queryClient.invalidateQueries({ queryKey: ['past-paper-profile-plan'] }),
+                ]);
+                await queryClient.refetchQueries({ queryKey: ['profile-plan'] });
+                await queryClient.refetchQueries({ queryKey: ['dashboard-entry-profile'] });
+                toast({
+                    title: 'Purchases Restored! 🎉',
+                    description: 'Your previous subscription has been successfully restored.',
+                });
+            } else if (res.success) {
+                toast({
+                    title: 'No Purchases Found',
+                    description: 'No active Google Play subscriptions were found for this Google account.',
+                });
+            } else {
+                toast({
+                    title: 'Restore Failed',
+                    description: res.error || 'Failed to restore purchases.',
+                    variant: 'destructive',
+                });
+            }
+        } finally {
+            setIsRestoring(false);
+        }
+    };
+
     if (isAuthLoading || arePlansLoading) {
         return <PageSkeleton />;
     }
@@ -314,21 +471,10 @@ const Pricing = () => {
             <div
                 className={`fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#07171f]/75 backdrop-blur-2xl border-b border-slate-200/70 dark:border-white/10 pt-[env(safe-area-inset-top)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
             >
-                <div className="container mx-auto px-5 h-14 flex justify-between items-center max-w-2xl">
-                    <Link to="/dashboard">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-10 h-10 p-0 rounded-full text-slate-500 dark:text-white/70 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 active:scale-90 transition-transform"
-                        >
-                            <ArrowLeft className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" className="w-7 h-7" />
-                        <span className="text-lg font-black text-slate-900 dark:text-white">Pricing</span>
-                    </div>
-                    <div className="w-10" />
+                <div className="container mx-auto grid h-14 max-w-2xl grid-cols-[1fr_auto_1fr] items-center px-5">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-slate-950 dark:text-white">Pricing</h1>
+                    <div aria-hidden="true" />
                 </div>
             </div>
 
@@ -361,16 +507,16 @@ const Pricing = () => {
                         <EcgLine className="h-full w-full" />
                     </div>
 
-                    <div className="flex items-center p-1.5 bg-slate-100 dark:bg-white/10 backdrop-blur-2xl rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg shadow-black/5 max-w-xs mx-auto mb-8">
+                    <div className="flex items-center p-1 bg-muted/80 backdrop-blur-md rounded-2xl border border-border shadow-sm max-w-xs mx-auto mb-8">
                         <button
                             onClick={() => setIsMonthly(true)}
-                            className={`flex-1 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${isMonthly ? 'bg-white text-teal-700 dark:text-[#0f766e] shadow-md' : 'text-slate-400 dark:text-white/50'}`}
+                            className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95 ${isMonthly ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Monthly
                         </button>
                         <button
                             onClick={() => setIsMonthly(false)}
-                            className={`flex-1 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all duration-300 active:scale-95 ${!isMonthly ? 'bg-white text-teal-700 dark:text-[#0f766e] shadow-md' : 'text-slate-400 dark:text-white/50'}`}
+                            className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 active:scale-95 ${!isMonthly ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                         >
                             Yearly
                         </button>
@@ -392,134 +538,110 @@ const Pricing = () => {
                         const isFreePlanAndPaidUser = plan.id === 'free' && isUserOnPaidPlan;
                         const isExecutivePlan = plan.contactOnly || plan.id === 'executive';
                         const isActive = activePlanId === plan.id;
+                        const playPackage = isPlayBilling
+                            ? findPackageForPlan(playOfferings ?? null, plan.id, isMonthly ? 'monthly' : 'yearly')
+                            : null;
 
                         return (
                             <motion.div
                                 key={plan.id}
                                 ref={(el) => { cardRefs.current[plan.id] = el; }}
-                                initial={{ opacity: 0, y: 32 }}
+                                initial={{ opacity: 0, y: 24 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.45, delay: index * 0.08 }}
-                                className={`relative overflow-hidden rounded-[2.5rem] bg-gradient-to-br ${style.gradient} text-white shadow-2xl shadow-black/20 dark:shadow-black/40 flex flex-col p-2 ring-4 shrink-0 snap-center w-[85vw] max-w-sm transition-all duration-500 ${isActive ? `${style.ring} scale-100 opacity-100` : 'ring-transparent scale-[0.96] opacity-70'}`}
+                                transition={{ duration: 0.35, delay: index * 0.06 }}
+                                className={`relative rounded-3xl ${style.cardBg} ${style.border} text-card-foreground flex flex-col p-6 shrink-0 snap-center w-[85vw] max-w-sm transition-all duration-300 ${isActive ? 'scale-100 opacity-100 shadow-xl shadow-black/5 ring-1 ring-primary/20' : 'scale-[0.97] opacity-80 shadow-sm'}`}
                             >
-                                <div
-                                    className="absolute inset-0 opacity-10"
-                                    style={{
-                                        backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.4) 20px, rgba(255,255,255,0.4) 40px)`,
-                                        maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)',
-                                    }}
-                                />
-
                                 {plan.popular && (
-                                    <motion.div
-                                        animate={{ boxShadow: ['0px 0px 0px rgba(255,255,255,0)', '0px 0px 20px rgba(255,255,255,0.4)', '0px 0px 0px rgba(255,255,255,0)'] }}
-                                        transition={{ duration: 2, repeat: Infinity }}
-                                        className="absolute top-3 left-1/2 -translate-x-1/2 z-20 rounded-full"
-                                    >
-                                        <Badge className="bg-white/20 backdrop-blur-md text-white border-white/20 uppercase text-[9px] tracking-[0.18em] font-bold px-3 py-1 shadow-lg">
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                                        <Badge className="bg-teal-600 hover:bg-teal-600 text-white border-0 uppercase text-[10px] tracking-widest font-bold px-3 py-1 shadow-md shadow-teal-600/30">
                                             Most Popular
                                         </Badge>
-                                    </motion.div>
+                                    </div>
                                 )}
 
-                                <div className="relative z-10 bg-white/10 backdrop-blur-md rounded-[2.3rem] border border-white/10 shadow-inner flex flex-col h-full">
-                                    <div className={`flex items-center gap-4 p-6 pb-4 ${plan.popular ? 'pt-12' : ''}`}>
-                                        <motion.div
-                                            animate={{ y: [0, -5, 0] }}
-                                            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut', delay: index * 0.3 }}
-                                            className="relative bg-white/15 p-3 rounded-2xl backdrop-blur-md border border-white/20 shrink-0"
-                                        >
-                                            {style.icon}
-                                        </motion.div>
-                                        <div className="flex-1 min-w-0">
-                                            <h2 className="text-xl font-black italic uppercase tracking-tighter drop-shadow-md truncate">
-                                                {plan.display}
-                                            </h2>
-                                            <div className={`h-1 w-10 ${style.accent} rounded-full mt-1.5`} />
+                                <div className="flex items-center gap-3.5 pb-4">
+                                    <div className={`p-2.5 rounded-2xl shrink-0 ${style.iconBg}`}>
+                                        {style.icon}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h2 className="text-xl font-bold tracking-tight text-foreground truncate">
+                                            {plan.display}
+                                        </h2>
+                                        <div className={`h-1 w-8 ${style.accentColor} rounded-full mt-1.5`} />
+                                    </div>
+                                </div>
+
+                                <div className="pb-4 pt-1 border-b border-border/50">
+                                    {isExecutivePlan ? (
+                                        <div>
+                                            <div className="text-2xl font-bold tracking-tight text-foreground">Custom Quote</div>
+                                            <div className="mt-0.5 text-xs text-muted-foreground font-medium uppercase tracking-wider">Contact sales team</div>
                                         </div>
-                                    </div>
+                                    ) : (
+                                        <div className="flex items-baseline gap-1">
+                                            {originalPrice && (
+                                                <span className="text-xs text-muted-foreground line-through font-mono mr-1">
+                                                    Rs.{Number(originalPrice).toLocaleString()}
+                                                </span>
+                                            )}
+                                            <span className="text-sm font-semibold text-muted-foreground font-mono">Rs.</span>
+                                            <span className="text-3xl font-extrabold tracking-tight text-foreground font-mono">
+                                                {Number(displayPrice).toLocaleString()}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground font-medium font-mono ml-1">
+                                                /{isMonthly ? 'mo' : 'yr'}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
 
-                                    {/* Price as a clinical readout — monospace, labeled like a lab result */}
-                                    <div className="px-6 pb-4">
-                                        {isExecutivePlan ? (
-                                            <div>
-                                                <div className="text-3xl font-black tracking-tight">Custom Quote</div>
-                                                <div className="mt-1 text-[10px] opacity-65 font-bold uppercase tracking-widest">Contact sales</div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-baseline gap-1">
-                                                {originalPrice && (
-                                                    <span className="text-xs opacity-50 line-through font-mono mr-1">Rs.{originalPrice}</span>
-                                                )}
-                                                <span className="text-sm font-bold opacity-80 font-mono">Rs.</span>
-                                                <span className="text-4xl font-black tracking-tight font-mono">{displayPrice}</span>
-                                                <span className="text-[10px] opacity-60 font-bold uppercase tracking-widest font-mono ml-1">/{isMonthly ? 'mo' : 'yr'}</span>
-                                            </div>
-                                        )}
-                                    </div>
+                                <div className="py-5 flex-1">
+                                    <ul className="space-y-3">
+                                        {currentPlanDetails.features.map((feature, idx) => (
+                                            <li key={idx} className="flex items-start gap-2.5 text-sm leading-snug">
+                                                <CheckCircle2 className={`h-4 w-4 shrink-0 ${style.checkColor} mt-0.5`} />
+                                                <span className="text-foreground/80">{feature}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
 
-                                    <div className="px-6 pb-2 flex-1">
-                                        <ul className="space-y-3">
-                                            {currentPlanDetails.features.map((feature, idx) => (
-                                                <li key={idx} className="flex items-start gap-3 text-sm font-semibold leading-snug">
-                                                    <CheckCircle2 className={`h-5 w-5 shrink-0 ${style.accent.replace('bg-', 'text-')} opacity-90 mt-0.5`} />
-                                                    <span className="text-white/90">{feature}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-
-                                    <div className="p-4 pt-5">
-                                        {isExecutivePlan ? (
-                                            <Link to="/contact-us?subject=executive-plan" className="block">
-                                                <Button className="w-full bg-white text-slate-900 hover:bg-white/90 active:scale-[0.98] transition-all duration-200 rounded-2xl h-14 uppercase font-black text-xs tracking-widest shadow-2xl">
-                                                    Contact Sales
-                                                </Button>
-                                            </Link>
-                                        ) : currentUserPlan === plan.id ? (
-                                            <Button disabled className="w-full bg-white/10 border border-white/20 text-white rounded-2xl h-14 uppercase font-bold text-xs tracking-widest">
-                                                Active Plan ✓
+                                <div className="pt-2">
+                                    {isExecutivePlan ? (
+                                        <Link to="/contact-us?subject=executive-plan" className="block">
+                                            <Button className={`w-full rounded-2xl h-12 uppercase font-black text-xs tracking-wider transition-all duration-200 active:scale-[0.98] ${style.buttonClass}`}>
+                                                Contact Sales
                                             </Button>
-                                        ) : isFreePlanAndPaidUser ? (
-                                            <Button disabled className="w-full bg-white/5 border border-white/10 text-white/40 rounded-2xl h-14 uppercase font-bold text-xs tracking-widest">
-                                                You are on a paid plan
+                                        </Link>
+                                    ) : currentUserPlan === plan.id ? (
+                                        <Button disabled className="w-full bg-muted border border-border/60 text-muted-foreground rounded-2xl h-12 uppercase font-bold text-xs tracking-wider">
+                                            Active Plan ✓
+                                        </Button>
+                                    ) : isFreePlanAndPaidUser ? (
+                                        <Button disabled className="w-full bg-muted/50 border border-border/40 text-muted-foreground/60 rounded-2xl h-12 uppercase font-bold text-xs tracking-wider">
+                                            You are on a paid plan
+                                        </Button>
+                                    ) : plan.id === 'free' ? (
+                                        <Link to="/dashboard" className="block">
+                                            <Button className={`w-full rounded-2xl h-12 uppercase font-black text-xs tracking-wider transition-all duration-200 active:scale-[0.98] ${style.buttonClass}`}>
+                                                Continue with Free
                                             </Button>
-                                        ) : (
-                                            <Link
-                                                to={plan.id === 'free' ? '/dashboard' : '/checkout'}
-                                                className="block"
-                                                onClick={() => {
-                                                    if (plan.id === 'free') return;
-                                                    const selectedPlan = {
-                                                        planId: plan.id,
-                                                        planName: plan.display,
-                                                        price: Number(displayPrice.replace(/,/g, '')) || 0,
-                                                        billingPeriod: isMonthly ? 'monthly' : 'yearly',
-                                                    } as const;
-                                                    void trackMetaAddToCart({
-                                                        ...selectedPlan,
-                                                        marketingConsent: measurementAllowed,
-                                                    });
-                                                    trackGoogleAddToCart({
-                                                        ...selectedPlan,
-                                                        analyticsConsent: measurementAllowed,
-                                                    });
-                                                }}
-                                                state={plan.id === 'free' ? undefined : {
-                                                    planName: plan.display,
-                                                    price: displayPrice,
-                                                    duration: isMonthly ? 'Monthly' : 'Yearly',
-                                                    validity: isMonthly ? 'monthly' : 'yearly',
-                                                    currency: 'PKR',
-                                                    planId: plan.id,
-                                                }}
-                                            >
-                                                <Button className="w-full bg-white text-slate-900 hover:bg-white/90 active:scale-[0.98] transition-all duration-200 rounded-2xl h-14 uppercase font-black text-xs tracking-widest shadow-2xl">
-                                                    {plan.id === 'free' ? 'Continue with Free' : 'Upgrade Now →'}
-                                                </Button>
-                                            </Link>
-                                        )}
-                                    </div>
+                                        </Link>
+                                    ) : (
+                                        <Button
+                                            onClick={() => handlePlayPurchase(plan)}
+                                            disabled={purchasingPlanId === plan.id}
+                                            className={`w-full rounded-2xl h-12 uppercase font-black text-xs tracking-wider transition-all duration-200 active:scale-[0.98] ${style.buttonClass}`}
+                                        >
+                                            {purchasingPlanId === plan.id ? (
+                                                <span className="flex items-center justify-center gap-2">
+                                                    <Loader2 className="w-4 h-4 animate-spin" /> Processing...
+                                                </span>
+                                            ) : (
+                                                'Upgrade via Google Play →'
+                                            )}
+                                        </Button>
+                                    )}
                                 </div>
                             </motion.div>
                         );
@@ -538,18 +660,108 @@ const Pricing = () => {
                     ))}
                 </div>
 
+                <div className="flex justify-center mb-6 px-5">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={isRestoring}
+                        onClick={handleRestorePurchases}
+                        className="rounded-full border-teal-500/30 dark:border-white/20 text-xs font-semibold hover:bg-teal-500/10 text-teal-700 dark:text-teal-300"
+                    >
+                        {isRestoring ? (
+                            <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" />
+                        ) : (
+                            <RotateCcw className="w-3.5 h-3.5 mr-2" />
+                        )}
+                        Restore Google Play Purchases
+                    </Button>
+                </div>
+
                 <div className="container mx-auto px-5 lg:px-8 max-w-2xl space-y-4 text-center">
                     <p className="text-[10px] text-slate-400 dark:text-white/35 uppercase tracking-[0.4em] font-black">
-                        All prices in PKR · Secure checkout · Cancel anytime
+                        All prices in PKR · Secure Google Play checkout · Cancel anytime
                     </p>
                     <p className="mx-auto max-w-md text-xs font-semibold leading-relaxed text-slate-500 dark:text-white/45">
-                        International payments are not yet supported. For further details contact us at{' '}
+                        Payments and subscriptions are managed securely via Google Play Store. For assistance, contact{' '}
                         <a href="mailto:billing@medmacs.app" className="text-teal-600 dark:text-[#2dd4bf] underline underline-offset-4">
                             billing@medmacs.app
                         </a>
                     </p>
                 </div>
             </main>
+
+            {/* PAYMENT PROCESSING & SUCCESS BOTTOM SHEET MODAL */}
+            <Dialog open={paymentModalState !== 'idle'} onOpenChange={(open) => !open && setPaymentModalState('idle')}>
+                <DialogContent className={cn(
+                    "sm:max-w-md bg-card border-t sm:border border-border transition-all duration-300 overflow-hidden shadow-2xl z-[100]",
+                    "fixed bottom-0 top-auto translate-y-0 rounded-t-3xl rounded-b-none max-w-full sm:max-w-md border-x-0 border-b-0 pb-[max(1.5rem,env(safe-area-inset-bottom))]"
+                )}>
+                    {/* Visual Sheet Handle Bar */}
+                    <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full mx-auto mt-1 mb-2" />
+
+                    <div className="flex flex-col items-center justify-center text-center px-4 pb-2">
+                        {paymentModalState === 'processing' && (
+                            <div className="flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in-95 duration-200 w-full">
+                                <div className="w-36 h-36 flex items-center justify-center my-[-10px]">
+                                    <LottiePlayer 
+                                        animationData={paymentProcessingAnim} 
+                                        loop={true} 
+                                        autoplay={true} 
+                                        style={{ width: 140, height: 140 }}
+                                    />
+                                </div>
+                                <DialogTitle className="text-xl font-bold text-foreground">Authorizing Payment</DialogTitle>
+                                <DialogDescription className="text-sm text-muted-foreground px-2 leading-relaxed">
+                                    Connecting to Google Play. Please complete the purchase confirmation on your device.
+                                </DialogDescription>
+                            </div>
+                        )}
+                        {paymentModalState === 'success' && (
+                            <div className="flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in-95 duration-300 w-full">
+                                <div className="w-40 h-40 flex items-center justify-center my-[-15px]">
+                                    <LottiePlayer 
+                                        animationData={paymentSuccessAnim} 
+                                        loop={true} 
+                                        autoplay={true} 
+                                        style={{ width: 160, height: 160 }}
+                                    />
+                                </div>
+                                <DialogTitle className="text-2xl font-black text-foreground">Payment Successful! 🎉</DialogTitle>
+                                <DialogDescription className="text-sm text-muted-foreground max-w-xs leading-relaxed">
+                                    Achievement Unlocked! Your account has been upgraded to <strong className="text-teal-600 dark:text-[#2dd4bf] font-bold">{upgradedPlanName}</strong>.
+                                </DialogDescription>
+                                <Button 
+                                    className="mt-4 w-full bg-teal-600 hover:bg-teal-700 text-white font-bold h-12 shadow-lg rounded-xl text-base active:scale-95 transition-transform" 
+                                    onClick={() => navigate('/dashboard')}
+                                >
+                                    Continue to Dashboard →
+                                </Button>
+                            </div>
+                        )}
+                        {paymentModalState === 'failure' && (
+                            <div className="flex flex-col items-center justify-center space-y-3 animate-in fade-in zoom-in-95 duration-300 w-full py-2">
+                                <div className="w-36 h-36 flex items-center justify-center my-[-10px]">
+                                    <LottiePlayer 
+                                        animationData={paymentFailAnim} 
+                                        loop={false} 
+                                        autoplay={true} 
+                                        style={{ width: 140, height: 140 }}
+                                    />
+                                </div>
+                                <DialogTitle className="text-xl font-bold text-foreground">Transaction Incomplete</DialogTitle>
+                                <DialogDescription className="text-sm text-destructive px-4 font-medium text-center">
+                                    {paymentErrorMessage || "Something went wrong during payment."}
+                                </DialogDescription>
+                                <div className="flex gap-3 w-full mt-4">
+                                    <Button variant="outline" className="flex-1 rounded-xl h-11" onClick={() => setPaymentModalState('idle')}>
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

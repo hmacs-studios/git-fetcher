@@ -1,0 +1,16 @@
+{
+  "name": "medmacs-payments",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit && wrangler deploy --dry-run",
+    "deploy": "wrangler deploy --keep-vars",
+    "types": "wrangler types"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.4",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.131.1"
+  }
+}

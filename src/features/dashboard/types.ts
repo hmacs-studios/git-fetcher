@@ -11,6 +11,7 @@ export type DashboardProfile = {
   username: string | null;
   plan?: string | null;
   year?: string | null;
+  program_code?: string | null;
   email?: string | null;
   plan_expiry_date?: string | null;
   role?: string | null;

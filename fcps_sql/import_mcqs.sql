@@ -30814,8 +30814,14 @@ declare v_stage integer; v_matched integer; v_chapters integer;
 begin
   select count(*) into v_stage from fcps_mcq_stage;
   select count(*), count(distinct c.id) into v_matched, v_chapters
-  from fcps_mcq_stage x join public.subjects s on lower(s.name)=lower(x.subject_name)
-  join public.chapters c on c.subject_id=s.id and lower(c.name)=lower(x.chapter_name)
+  from fcps_mcq_stage x join public.subjects s on lower(s.name)=lower(
+    case
+      when x.subject_name='Anatomy Histology Embryology (Paper 1)' and x.chapter_name like '%Histology - %' then 'Histology (Paper 1)'
+      when x.subject_name='Anatomy Histology Embryology (Paper 1)' then 'Embryology (Paper 1)'
+      when x.subject_name='Anatomy Histology Embryology (Paper 2)' then 'Anatomy (Paper 2)'
+      else x.subject_name
+    end)
+  join public.chapters c on c.subject_id=s.id and (lower(c.name)=lower(x.chapter_name) or lower(to_jsonb(c)->>'original_name')=lower(x.chapter_name))
   where s.year='medicine_allied' and s.institutes=to_jsonb(array['fcps_part_1']::text[]);
   if v_stage<>30772 or v_matched<>30772 or v_chapters<>117 then
     raise exception 'FCPS import mapping failed: stage=%, matched=%, chapters=%', v_stage, v_matched, v_chapters;
@@ -30825,8 +30831,14 @@ end $$;
 insert into public.mcqs (id, question, options, correct_answer, explanation, category, chapter_id, subject, difficulty)
 select x.id, x.question, x.options, x.correct_answer, x.explanation, 'fcps1_medicine_allied_2026', c.id, s.name, 'FCPS Part 1'
 from fcps_mcq_stage x
-join public.subjects s on lower(s.name)=lower(x.subject_name)
-join public.chapters c on c.subject_id=s.id and lower(c.name)=lower(x.chapter_name)
+join public.subjects s on lower(s.name)=lower(
+  case
+    when x.subject_name='Anatomy Histology Embryology (Paper 1)' and x.chapter_name like '%Histology - %' then 'Histology (Paper 1)'
+    when x.subject_name='Anatomy Histology Embryology (Paper 1)' then 'Embryology (Paper 1)'
+    when x.subject_name='Anatomy Histology Embryology (Paper 2)' then 'Anatomy (Paper 2)'
+    else x.subject_name
+  end)
+join public.chapters c on c.subject_id=s.id and (lower(c.name)=lower(x.chapter_name) or lower(to_jsonb(c)->>'original_name')=lower(x.chapter_name))
 where s.year='medicine_allied' and s.institutes=to_jsonb(array['fcps_part_1']::text[])
 on conflict (id) do update set
   question=excluded.question, options=excluded.options, correct_answer=excluded.correct_answer,

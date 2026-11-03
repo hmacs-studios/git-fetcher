@@ -14,11 +14,15 @@ type ContentResponse = {
   end(payload?: unknown): ContentResponse;
 };
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://pxjvltgarzvoptdfdkxq.supabase.co';
+const MEDMACS_SUPABASE_URL = 'https://ssmmquedryomwxccaqqb.supabase.co';
+const SUPABASE_URL = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || MEDMACS_SUPABASE_URL).replace(/\/+$/, '');
+if (SUPABASE_URL !== MEDMACS_SUPABASE_URL) {
+  throw new Error('SUPABASE_URL must point to the Medmacs Supabase project.');
+}
 const SUPABASE_ANON_KEY =
   process.env.SUPABASE_ANON_KEY ||
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-  'sb_publishable_RVLZ7IetJ-w7raWeYGWa5A_5wV4g5rI';
+  'sb_publishable_GkYgPdKV2U51Dd6Wo3AeLQ_nuyW-PIH';
 
 const allowedOrigins = new Set([
   'https://medmacs.app',
@@ -35,6 +39,7 @@ const allowedOrigins = new Set([
 
 type SubjectLike = {
   institutes?: string[] | null;
+  program_code?: string | null;
 };
 
 type SubjectRow = SubjectLike & {
@@ -54,7 +59,7 @@ type ChapterRow = {
   chapter_number: number;
   subject_id: string;
   content_type?: string | null;
-  mcqs?: Array<{ count: number }>;
+  mcq_count?: number | null;
 };
 
 type SharedQuestionBankGroup = {
@@ -211,7 +216,7 @@ const getUserProfile = async (client: any) => {
 
   const { data: profile, error: profileError } = await client
     .from('profiles')
-    .select('year, institute')
+    .select('year, program_code, institute')
     .eq('id', userData.user.id)
     .single();
 
@@ -219,7 +224,7 @@ const getUserProfile = async (client: any) => {
     return null;
   }
 
-  return profile as { year?: string | null; institute?: string | null };
+  return profile as { year?: string | null; program_code?: string | null; institute?: string | null };
 };
 
 const getInstituteScope = async (client: any, institute?: string | null): Promise<InstituteScope | null> => {
@@ -246,6 +251,10 @@ const fetchScopedSubjects = async (client: any, table: string) => {
   const yearOptions = getInstituteYearOptions(instituteScope);
   const normalizedProfileYear = String(profile?.year || '').trim();
   const effectiveYear = normalizedProfileYear || null;
+  const isSpecializedTest = instituteScope?.category === 'specialized_test';
+  const effectiveProgram = isSpecializedTest
+    ? null
+    : String(profile.program_code || 'mbbs').trim().toLowerCase();
 
   // Specialized curricula must never infer a specialty for a profile whose
   // year is null. Even a single available option must be selected explicitly.
@@ -260,6 +269,11 @@ const fetchScopedSubjects = async (client: any, table: string) => {
 
   if (effectiveYear) {
     query = query.eq('year', effectiveYear);
+  }
+  if (effectiveProgram === 'mbbs') {
+    query = query.or('program_code.eq.mbbs,program_code.is.null');
+  } else if (effectiveProgram) {
+    query = query.eq('program_code', effectiveProgram);
   }
 
   const { data, error } = await query;
@@ -334,7 +348,7 @@ const resolveSharedChapters = async (
 
     const { data, error } = await client
       .from('chapters')
-      .select('id, name, description, chapter_number, subject_id, content_type, mcqs(count)')
+      .select('id, name, description, chapter_number, subject_id, content_type, mcq_count')
       .eq('subject_id', sourceSubject.id);
 
     if (error) throw error;
@@ -418,7 +432,7 @@ export default async function handler(req: ContentRequest, res: ContentResponse)
         if (!subject) return res.status(404).json({ error: 'Subject not found' });
         const { data, error } = await client
           .from('chapters')
-          .select('id, name, description, chapter_number, subject_id, content_type, mcqs(count)')
+          .select('id, name, description, chapter_number, subject_id, content_type, mcq_count')
           .eq('subject_id', subjectId)
           .order('chapter_number');
         if (error) throw error;
@@ -430,8 +444,32 @@ export default async function handler(req: ContentRequest, res: ContentResponse)
         return res.status(200).json({
           data: [...chaptersById.values()].sort((a, b) => a.chapter_number - b.chapter_number).map((chapter: ChapterRow) => ({
             ...chapter,
-            mcq_count: chapter.mcqs?.[0]?.count || 0,
+            mcq_count: chapter.mcq_count || 0,
           })),
+        });
+      }
+
+      case 'mcq-directory': {
+        if (!subjectId) return res.status(400).json({ error: 'subjectId is required' });
+        const subject = await fetchVisibleSubject(client, subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
+        const { data, error } = await client
+          .from('chapters')
+          .select('id, name, description, chapter_number, subject_id, content_type, mcq_count')
+          .eq('subject_id', subjectId)
+          .order('chapter_number');
+        if (error) throw error;
+        const sharedChapters = await resolveSharedChapters(client, subject);
+        const chaptersById = new Map<string, ChapterRow>();
+        for (const chapter of (data || []) as ChapterRow[]) chaptersById.set(chapter.id, chapter);
+        for (const chapter of sharedChapters) chaptersById.set(chapter.id, chapter);
+        return res.status(200).json({
+          data: {
+            subject,
+            chapters: [...chaptersById.values()]
+              .sort((a, b) => a.chapter_number - b.chapter_number)
+              .map(chapter => ({ ...chapter, mcq_count: chapter.mcq_count || 0 })),
+          },
         });
       }
 
@@ -444,7 +482,7 @@ export default async function handler(req: ContentRequest, res: ContentResponse)
 
         const { data: directChapter, error } = await client
           .from('chapters')
-          .select('id, name, description, chapter_number, subject_id, content_type, mcqs(count)')
+          .select('id, name, description, chapter_number, subject_id, content_type, mcq_count')
           .eq('id', chapterId)
           .eq('subject_id', subjectId)
           .maybeSingle();
@@ -456,7 +494,7 @@ export default async function handler(req: ContentRequest, res: ContentResponse)
         if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
         return res.status(200).json({
-          data: { ...chapter, mcq_count: chapter.mcqs?.[0]?.count || 0 },
+          data: { ...chapter, mcq_count: chapter.mcq_count || 0 },
         });
       }
 
@@ -614,13 +652,27 @@ export default async function handler(req: ContentRequest, res: ContentResponse)
       }
 
       case 'app-seq-subjects': {
-        return res.status(200).json({ data: await fetchScopedSubjects(client, 'seqs_subjects') });
+        const scopedSubjects = await fetchScopedSubjects(client, 'subjects') as SubjectRow[];
+        if (scopedSubjects.length === 0) return res.status(200).json({ data: [] });
+        const { data: chapters, error } = await client
+          .from('chapters')
+          .select('subject_id, seqs(count)')
+          .in('subject_id', scopedSubjects.map(subject => subject.id));
+        if (error) throw error;
+        const subjectIdsWithSeqs = new Set(
+          (chapters || [])
+            .filter((chapter: any) => Number(chapter.seqs?.[0]?.count || 0) > 0)
+            .map((chapter: any) => chapter.subject_id),
+        );
+        return res.status(200).json({ data: scopedSubjects.filter(subject => subjectIdsWithSeqs.has(subject.id)) });
       }
 
       case 'app-seq-chapters': {
         if (!subjectId) return res.status(400).json({ error: 'subjectId is required' });
+        const subject = await fetchVisibleSubject(client, subjectId);
+        if (!subject) return res.status(404).json({ error: 'Subject not found' });
         const { data, error } = await client
-          .from('seqs_chapters')
+          .from('chapters')
           .select('id, name, description, chapter_number, subject_id, seqs(count)')
           .eq('subject_id', subjectId)
           .order('chapter_number');

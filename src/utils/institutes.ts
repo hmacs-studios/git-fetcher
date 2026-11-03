@@ -1,5 +1,5 @@
-// Institute utilities - fetches from backend
 import { supabase } from '@/integrations/supabase/client';
+import type { StudyProgramCode } from './studyPrograms';
 
 export interface Institute {
   id: string;
@@ -17,38 +17,61 @@ export interface Institute {
   institute_type?: string | null;
   is_public?: boolean | null;
   years: string[];
+  programs?: StudyProgramCode[] | null;
   dashboard_components?: {
     mcqs: boolean;
+    past_papers?: boolean;
     seqs: boolean;
     viva: boolean;
+    programs?: Record<string, {
+      mcqs?: boolean;
+      past_papers?: boolean;
+      seqs?: boolean;
+      viva?: boolean;
+    }>;
   };
 }
 
-// Cache for institutes
 let cachedInstitutes: Institute[] | null = null;
 let cacheTimestamp = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
+export type InstitutesLoadResult = {
+  institutes: Institute[];
+  error: string | null;
+};
 const SPECIALIZED_TEST_CODES = new Set([
   'jinnah_house_job_test',
   'jpmc_house_job_test',
+  'nre',
   'nle',
   'fcps_part_1',
   'fcps_part_2',
+  'medical_cadet',
 ]);
 
-export async function fetchInstitutes(options?: { force?: boolean } | boolean): Promise<Institute[]> {
+export async function fetchInstitutesWithStatus(options?: { force?: boolean } | boolean): Promise<InstitutesLoadResult> {
   const force = typeof options === 'boolean' ? options : !!options?.force;
   if (!force && cachedInstitutes && Date.now() - cacheTimestamp < CACHE_TTL) {
-    return cachedInstitutes;
+    return { institutes: cachedInstitutes, error: null };
   }
   const { data, error } = await supabase
     .from('institutes')
     .select('*')
     .order('name');
-  if (error || !data) return cachedInstitutes || [];
+  if (error || !data) {
+    return {
+      institutes: cachedInstitutes || [],
+      error: error?.message || 'Could not load institutes. Please try again.',
+    };
+  }
   cachedInstitutes = data as Institute[];
   cacheTimestamp = Date.now();
-  return cachedInstitutes;
+  return { institutes: cachedInstitutes, error: null };
+}
+
+export async function fetchInstitutes(options?: { force?: boolean } | boolean): Promise<Institute[]> {
+  const { institutes } = await fetchInstitutesWithStatus(options);
+  return institutes;
 }
 
 export async function getEnabledInstitutes(): Promise<Institute[]> {
@@ -69,11 +92,15 @@ export function getInstituteByCode(code: string, institutes: Institute[]): Insti
   return institutes.find(i => i.code === code);
 }
 
-export function getInstituteCategory(institute?: Pick<Institute, 'category'> | null): 'institute' | 'specialized_test' {
-  return institute?.category === 'specialized_test' ? 'specialized_test' : 'institute';
+export function getInstituteCategory(institute?: Pick<Institute, 'category' | 'code'> | null): 'institute' | 'specialized_test' {
+  if (!institute) return 'institute';
+  if (institute.category === 'specialized_test' || isSpecializedTestCode(institute.code)) {
+    return 'specialized_test';
+  }
+  return 'institute';
 }
 
-export function isSpecializedTestInstitute(institute?: Pick<Institute, 'category'> | null): boolean {
+export function isSpecializedTestInstitute(institute?: Pick<Institute, 'category' | 'code'> | null): boolean {
   return getInstituteCategory(institute) === 'specialized_test';
 }
 

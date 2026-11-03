@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchInstitutes, getInstituteByCode } from '@/utils/institutes';
+import { getProfileFieldsCompletion } from '@/utils/profileCompletion';
+import type { Institute } from '@/utils/institutes';
 import {
   cacheProfile,
   calculateCurrentStreak,
@@ -20,6 +20,28 @@ import type {
   UserStats,
   WhatsNewItem,
 } from '../types';
+
+type DashboardBootstrap = {
+  institute: Institute | null;
+  components: NonNullable<Institute['dashboard_components']>;
+  contentVersion: number;
+};
+
+const resolveLegacyComponents = (
+  institute: Institute | null,
+  programCode?: string | null,
+): DashboardBootstrap['components'] => {
+  const configured = institute?.dashboard_components;
+  const program = String(programCode || 'mbbs').trim().toLowerCase();
+  const overrides = configured?.programs?.[program];
+
+  return {
+    mcqs: overrides?.mcqs ?? configured?.mcqs ?? true,
+    past_papers: overrides?.past_papers ?? configured?.past_papers ?? true,
+    seqs: overrides?.seqs ?? configured?.seqs ?? false,
+    viva: overrides?.viva ?? configured?.viva ?? false,
+  };
+};
 
 type UseDashboardDataOptions = {
   userId?: string;
@@ -46,36 +68,91 @@ export function useDashboardData({
   loadSecondaryData,
 }: UseDashboardDataOptions) {
   const queryClient = useQueryClient();
-  const [profileVerifiedFromServer, setProfileVerifiedFromServer] = useState(false);
-
-  useEffect(() => {
-    setProfileVerifiedFromServer(false);
-  }, [userId]);
 
   const profileQuery = useQuery<DashboardProfile | null>({
-    queryKey: ['profile', userId],
-    queryFn: async () => {
+    queryKey: ['dashboard-entry-profile', userId, isOfflineMode],
+    queryFn: async ({ signal }) => {
       if (!userId) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, avatar_url, full_name, updated_at, username, plan, year, email, plan_expiry_date, role, institute, daily_mcq_submissions, heard_about_us')
-        .eq('id', userId)
-        .maybeSingle();
-      if (error) throw error;
-      const profile = data as DashboardProfile | null;
-      setProfileVerifiedFromServer(true);
-      cacheProfile(userId, profile);
-      return profile;
+      if (isOfflineMode) return readCachedProfile(userId);
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 10000);
+      const abortRequest = () => controller.abort();
+      signal.addEventListener('abort', abortRequest, { once: true });
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, avatar_url, full_name, updated_at, username, plan, year, program_code, email, plan_expiry_date, role, institute, daily_mcq_submissions, heard_about_us')
+          .eq('id', userId)
+          .abortSignal(controller.signal)
+          .maybeSingle();
+        if (error) throw error;
+        const profile = data as DashboardProfile | null;
+        cacheProfile(userId, profile);
+        return profile;
+      } finally {
+        window.clearTimeout(timeoutId);
+        signal.removeEventListener('abort', abortRequest);
+      }
     },
     enabled: !!userId,
-    initialData: () => readCachedProfile(userId),
-    retry: 1,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
   });
 
   const userStatsQuery = useQuery<UserStats | null>({
     queryKey: ['user-stats', userId],
     queryFn: async () => {
       if (!userId) return null;
+      const { data: aggregate, error: aggregateError } = await (supabase as any)
+        .rpc('get_dashboard_user_stats');
+
+      if (!aggregateError && aggregate) {
+        return {
+          totalQuestions: Number(aggregate.total_questions || 0),
+          correctAnswers: Number(aggregate.correct_answers || 0),
+          accuracy: Number(aggregate.accuracy || 0),
+          currentStreak: Number(aggregate.current_streak || 0),
+          rankPoints: Number(aggregate.correct_answers || 0) * 10
+            + Number(aggregate.current_streak || 0) * 5
+            + Number(aggregate.accuracy || 0),
+          battlesWon: Number(aggregate.battles_won || 0),
+          totalBattles: Number(aggregate.total_battles || 0),
+          savedQuestions: Number(aggregate.saved_questions || 0),
+        } satisfies UserStats;
+      }
+
+      // Older deployments already expose a smaller stats RPC. Use it while the
+      // Dashboard-specific RPC migration rolls out instead of downloading history.
+      const [{ data: legacyStats, error: legacyStatsError }, winsResult, statsBattlesResult, statsSavedResult, answersResult] = await Promise.all([
+        (supabase as any).rpc('get_user_stats', { p_user_id: userId }),
+        supabase.from('battle_results').select('rank', { count: 'exact', head: true }).eq('user_id', userId).eq('rank', 1),
+        supabase.from('battle_results').select('rank', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('saved_mcqs').select('*', { count: 'exact', head: true }).eq('user_id', userId),
+        supabase.from('user_answers').select('created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(60),
+      ]);
+      if (!legacyStatsError && legacyStats) {
+        const totalQuestions = Number(legacyStats.total_questions || 0);
+        const correctAnswers = Number(legacyStats.correct_answers || 0);
+        const accuracy = Number(legacyStats.accuracy || 0);
+        // Compute strict consecutive streak from recent answers to avoid legacy SQL aggregate bugs
+        const currentStreak = answersResult?.data && answersResult.data.length > 0
+          ? calculateCurrentStreak(answersResult.data.map(a => a.created_at))
+          : Math.min(Number(legacyStats.current_streak || 0), 1);
+        return {
+          totalQuestions,
+          correctAnswers,
+          accuracy,
+          currentStreak,
+          rankPoints: correctAnswers * 10 + currentStreak * 5 + accuracy,
+          battlesWon: winsResult.count || 0,
+          totalBattles: statsBattlesResult.count || 0,
+          savedQuestions: statsSavedResult.count || 0,
+        };
+      }
+
+      // Final compatibility fallback for environments without either stats RPC.
       const { data: answers, error: answersError } = await supabase
         .from('user_answers')
         .select('is_correct, created_at')
@@ -103,7 +180,8 @@ export function useDashboardData({
         savedQuestions: savedResult.count || 0,
       };
     },
-    enabled: !!userId && !isOfflineMode,
+    enabled: !!userId && !isOfflineMode && profileQuery.isFetchedAfterMount
+      && !profileQuery.isError && getProfileFieldsCompletion(profileQuery.data).complete,
     retry: 1,
     staleTime: 1000 * 60 * 5,
   });
@@ -201,15 +279,42 @@ export function useDashboardData({
     retry: 1,
   });
 
-  const instituteQuery = useQuery({
-    queryKey: ['instituteData', profileQuery.data?.institute],
+  const instituteQuery = useQuery<DashboardBootstrap | null>({
+    queryKey: ['dashboard-bootstrap', profileQuery.data?.institute, profileQuery.data?.program_code, profileQuery.data?.year],
     queryFn: async () => {
       const instituteCode = profileQuery.data?.institute;
       if (!instituteCode) return null;
-      const institutes = await fetchInstitutes({ force: true });
-      return getInstituteByCode(instituteCode, institutes) || null;
+
+      // One server RPC resolves the programme override and the persisted
+      // content snapshot. It replaces a client-side chapter-count fan-out.
+      const { data: bootstrap, error: bootstrapError } = await (supabase as any)
+        .rpc('get_dashboard_content_capabilities');
+      if (!bootstrapError && bootstrap && typeof bootstrap === 'object') {
+        return {
+          institute: (bootstrap.institute || null) as Institute | null,
+          components: (bootstrap.components || {}) as DashboardBootstrap['components'],
+          contentVersion: Number(bootstrap.content_version || 0),
+        };
+      }
+
+      // Compatibility fallback while the database migration rolls out.
+      const { data, error } = await supabase
+        .from('institutes')
+        .select('*')
+        .eq('code', instituteCode)
+        .maybeSingle();
+      if (error) throw error;
+      const institute = data as Institute | null;
+      return {
+        institute,
+        components: resolveLegacyComponents(institute, profileQuery.data?.program_code),
+        contentVersion: 0,
+      };
     },
-    enabled: !!profileQuery.data?.institute,
+    enabled: !isOfflineMode && profileQuery.isFetchedAfterMount
+      && !profileQuery.isError && getProfileFieldsCompletion(profileQuery.data).complete,
+    staleTime: 1000 * 60 * 30,
+    retry: 1,
   });
 
   const dashboardAnnouncementsQuery = useQuery<DashboardAnnouncement[]>({
@@ -283,7 +388,6 @@ export function useDashboardData({
 
   return {
     profileQuery,
-    profileVerifiedFromServer,
     userStatsQuery,
     announcementsQuery,
     whatsNewQuery,

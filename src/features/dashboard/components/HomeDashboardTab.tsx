@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
   BookOpen,
@@ -12,6 +12,7 @@ import {
   Gauge,
   Instagram,
   Linkedin,
+  Lock,
   Sparkles,
   Star,
   Stethoscope,
@@ -24,12 +25,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { MCQProgressWidget } from '@/components/dashboard/MCQProgressWidget';
 import { DashboardActionCard } from './DashboardActionCard';
-import { DashboardAnnouncementCard } from './DashboardAnnouncementCard';
-import { InstituteDetailCard } from './InstituteDetailCard';
+import { navigateWithCardExpansion } from '../dashboardCardNavigation';
+import { DashboardAnnouncementCarousel } from './DashboardAnnouncementCard';
 import { DailyMedmacsPulseCard } from './DailyMedmacsPulseCard';
+import { StudentInstituteRankingCard } from './StudentInstituteRankingCard';
 import { HmacsProductModal } from './HmacsProductModal';
-import { useAllFeatureAccess } from '@/hooks/useFeatureAccess';
+import { useAllFeatureAccess, type FeatureKey } from '@/hooks/useFeatureAccess';
 import { FeatureLockModal } from '@/components/ui/FeatureLockModal';
+import { supabase } from '@/integrations/supabase/client';
 import medisticsLogo from '@/assets/hmacs/medistics_icon.svg';
 import medizenLogo from '@/assets/hmacs/medizen_icon.svg';
 import type {
@@ -44,6 +47,47 @@ import type {
   TermOfDay,
   UserStats,
 } from '../types';
+
+const DASHBOARD_FEATURE_BY_LINK: Record<string, FeatureKey> = {
+  '/mcqs': 'mcqs',
+  '/past-papers': 'mcqs',
+  '/saved-mcqs': 'saved_questions',
+  '/battle': 'battle_mode',
+  '/ai/chatbot': 'ai_tutor',
+  '/mistake-book': 'mistake_book',
+  '/smart-deck': 'flashcards',
+  '/flp': 'flps',
+  '/ai/test-generator': 'ai_test_attempt',
+  '/learn-with-ai': 'ai_tutor',
+  '/seqs': 'seqs',
+  '/practicals': 'ospe',
+};
+
+const DEFAULT_DR_AHROID_MESSAGES = [
+  'Dr Ahroid is the only AI in Pakistan trained on actual medical books.',
+  'Dr Ahroid is trained on actual medical books.',
+  'Get clear explanations for difficult medical concepts with Dr Ahroid.',
+  'Revise smarter with an AI study companion built for medical students.',
+];
+
+const parseDrAhroidMessages = (value: unknown): string[] => {
+  const normalize = (messages: unknown[]) => messages
+    .map(message => String(message).trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  if (Array.isArray(value)) return normalize(value);
+  if (typeof value !== 'string') return [];
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) return normalize(parsed);
+  } catch {
+    // Cloud editors may use one message per line instead of JSON.
+  }
+
+  return normalize(value.split(/\r?\n/));
+};
 
 type HomeDashboardTabProps = {
   greetingMessage: string;
@@ -65,7 +109,7 @@ type HomeDashboardTabProps = {
   caseLoading: boolean;
   onOpenCase: () => void;
   instituteModules: DashboardAction[];
-  dashboardAnnouncement?: DashboardAnnouncement | null;
+  dashboardAnnouncements: DashboardAnnouncement[];
   onOpenAnnouncement: (announcement: DashboardAnnouncement) => void;
   instituteData: DashboardInstitute;
   personalizationActions: DashboardAction[];
@@ -73,6 +117,7 @@ type HomeDashboardTabProps = {
   promotions: DashboardPromotion[];
   hmacsProducts?: HmacsProduct[];
   onOpenCollaborate: () => void;
+  activationMode?: boolean;
 };
 
 export function HomeDashboardTab({
@@ -95,7 +140,7 @@ export function HomeDashboardTab({
   caseLoading,
   onOpenCase,
   instituteModules,
-  dashboardAnnouncement,
+  dashboardAnnouncements,
   onOpenAnnouncement,
   instituteData,
   personalizationActions,
@@ -103,10 +148,65 @@ export function HomeDashboardTab({
   promotions,
   hmacsProducts = [],
   onOpenCollaborate,
+  activationMode = false,
 }: HomeDashboardTabProps) {
+  const navigate = useNavigate();
   const [selectedProduct, setSelectedProduct] = useState<HmacsProduct | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [lockedFeatureModal, setLockedFeatureModal] = useState<{ open: boolean; title?: string }>({ open: false });
+  const [drAhroidMessages, setDrAhroidMessages] = useState(DEFAULT_DR_AHROID_MESSAGES);
+  const [drAhroidMessageIndex, setDrAhroidMessageIndex] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadMessages = async () => {
+      const { data, error } = await supabase
+        .from('app_config')
+        .select('value')
+        .eq('key', 'dr_ahroid_rotating_messages')
+        .maybeSingle();
+
+      if (!active || error || !data) return;
+      const messages = parseDrAhroidMessages(data.value);
+      if (messages.length > 0) {
+        setDrAhroidMessages(messages);
+        setDrAhroidMessageIndex(0);
+      }
+    };
+
+    void loadMessages();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (drAhroidMessages.length < 2) return;
+    const intervalId = window.setInterval(() => {
+      setDrAhroidMessageIndex(current => (current + 1) % drAhroidMessages.length);
+    }, 8000);
+    return () => window.clearInterval(intervalId);
+  }, [drAhroidMessages]);
+  // Use the same profile and access matrix inputs as FeatureGate so a card never
+  // appears open when its destination is plan-locked.
+  const { features: featureAccess, isLoading: featureAccessLoading } = useAllFeatureAccess(
+    profile?.institute || 'global',
+    profile?.plan || 'free',
+  );
+
+  const featureKeyForAction = (action: DashboardAction) =>
+    action.link ? DASHBOARD_FEATURE_BY_LINK[action.link] : undefined;
+
+  const isPlanLocked = (action: DashboardAction) => {
+    const featureKey = featureKeyForAction(action);
+    return Boolean(featureKey && !featureAccessLoading && !featureAccess[featureKey]);
+  };
+
+  const isCheckingPlanAccess = (action: DashboardAction) =>
+    Boolean(featureKeyForAction(action) && featureAccessLoading);
+
+  const showFeatureLock = (action: DashboardAction) => {
+    setLockedFeatureModal({ open: true, title: action.title });
+  };
 
   const userPlanDisplayName = rawUserPlan.charAt(0).toUpperCase() + rawUserPlan.slice(1) + ' Plan';
 
@@ -131,19 +231,77 @@ export function HomeDashboardTab({
     }
   };
 
+  if (activationMode) {
+    const mcqAction = quickActions.find((action) => action.link === '/mcqs');
+    return (
+      <div>
+        <div className="mb-5 pt-4 sm:pt-6">
+          <h1 className="text-xl sm:text-2xl font-extrabold leading-tight break-words brand-display">
+            <span className="text-muted-foreground font-bold">{greetingMessage}{greetingMessage.endsWith(',') || greetingMessage.endsWith('!') ? ' ' : ', '}</span>
+            <span className="font-black text-foreground">{displayName}</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-semibold">Your next focused study session starts here.</p>
+        </div>
+
+        <div className="mb-6 overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+              <TrendingUp className="h-4 w-4 text-primary" /> Analytics
+            </span>
+            <Badge className="border-0 bg-primary/10 text-[10px] font-bold text-primary">Coming up</Badge>
+          </div>
+          <p className="mt-3 text-sm font-semibold text-muted-foreground">Your analytics will appear here.</p>
+          <div className="mt-3 h-2.5 rounded-full bg-muted" />
+        </div>
+
+        <h2 className="text-sm font-bold text-foreground mb-3 flex items-center gap-1.5">
+          <Zap className="text-amber-500 fill-amber-500 w-3.5 h-3.5" /> Quick Actions
+        </h2>
+        <div className="grid grid-cols-2 gap-3.5">
+          {mcqAction && (
+            <DashboardActionCard
+              action={mcqAction}
+              fixedHeight
+              soft
+              offlineMode={isOfflineMode}
+              locked={false}
+              accessLoading={false}
+              onLockedClick={() => undefined}
+            />
+          )}
+          <div aria-hidden="true" className="pointer-events-none min-h-[132px] rounded-3xl border border-border/60 bg-muted/80 opacity-90" />
+          <div aria-hidden="true" className="pointer-events-none min-h-[132px] rounded-3xl border border-border/55 bg-muted/75 opacity-80" />
+          <div aria-hidden="true" className="pointer-events-none min-h-[132px] rounded-3xl border border-border/45 bg-muted/70 opacity-70" />
+        </div>
+
+        <div className="relative z-20 -mt-[138px] min-h-[calc(100dvh-var(--header-height)-19rem)] overflow-hidden">
+          <div className="absolute left-4 top-[20%] z-10 max-w-[58%] origin-top-left -rotate-[7deg]">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-primary">Dr Ahroid says</p>
+            <p className="font-['Bricolage_Grotesque'] text-[clamp(1.7rem,8vw,2.5rem)] font-extrabold leading-[0.95] tracking-[-0.065em] text-foreground">
+              Let’s attempt your first <span className="text-primary">MCQ.</span>
+            </p>
+            <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">Choose any subject and chapter. I’ll help with every answer.</p>
+          </div>
+          <div className="absolute bottom-0 right-[-1.5rem] h-[78%] w-[64%] bg-gradient-to-t from-primary/10 to-transparent blur-3xl" />
+          <img src="/mascots/dr-ahroid-confident.png" alt="Dr Ahroid" className="absolute bottom-8 right-[-1rem] z-10 h-[84%] w-auto max-w-none object-contain object-bottom" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="mb-5 pt-4 sm:pt-6">
-        <h1 className="text-2xl sm:text-3xl font-extrabold leading-tight break-words brand-syne">
+        <h1 className="text-xl sm:text-2xl font-extrabold leading-tight break-words brand-display">
           <span className="text-muted-foreground font-bold">{greetingMessage}{greetingMessage.endsWith(',') || greetingMessage.endsWith('!') ? ' ' : ', '}</span>
-          <span className="text-shimmer font-black">{displayName}</span>
+          <span className="font-black text-foreground">{displayName}</span>
         </h1>
         {dashboardNoticeLine && (
           <div className="mt-3 rounded-xl border border-amber-200/70 bg-[#fff8db] px-3 py-2 text-xs font-bold leading-relaxed text-amber-900 shadow-sm dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100">
             {dashboardNoticeLine}
           </div>
         )}
-        <p className="text-xs text-muted-foreground mt-1.5 font-medium">Ready for your next study move?</p>
+        <p className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-semibold">Your next focused study session starts here.</p>
       </div>
 
       {isOfflineMode ? (
@@ -165,7 +323,7 @@ export function HomeDashboardTab({
         const streak = userStats?.currentStreak || 0;
         const totalQuestions = userStats?.totalQuestions || 0;
         const remark = totalQuestions === 0
-          ? { text: 'Start Practicing! 🚀', gradient: 'from-teal-500 to-cyan-500' }
+          ? { text: 'Start Practicing! 🚀', gradient: 'from-sky-500 to-indigo-500' }
           : accuracy >= 85
             ? { text: 'Outstanding! 🔥', gradient: 'from-emerald-500 to-teal-600' }
             : accuracy >= 70
@@ -178,7 +336,7 @@ export function HomeDashboardTab({
 
         return (
           <div className="relative mb-6 min-h-[100px]">
-            <div className="overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-b from-primary/12 to-accent/40 p-4 shadow-md shadow-primary/5 dark:from-primary/20 dark:to-accent/20">
+            <div className="overflow-hidden rounded-2xl border border-border/60 bg-card p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Flame className="w-4 h-4 text-orange-500" /> {streak} day streak
@@ -189,7 +347,7 @@ export function HomeDashboardTab({
               </div>
               <Progress value={accuracy} className="h-2.5 mb-2" />
               <div className="flex justify-between text-[11px] font-semibold">
-                <span className="text-primary">{accuracy}% accuracy</span>
+                <span className="text-foreground">{accuracy}% accuracy</span>
                 <span className="text-muted-foreground">{totalQuestions} solved</span>
               </div>
             </div>
@@ -212,8 +370,9 @@ export function HomeDashboardTab({
       </h2>
       <div className="grid grid-cols-2 gap-3.5 mb-3">
         {quickActions.map((action) => {
+          const locked = isPlanLocked(action);
           const card = (
-            <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
+            <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} locked={locked} accessLoading={isCheckingPlanAccess(action)} onLockedClick={() => showFeatureLock(action)} />
           );
           if (action.title !== 'Learn with Dr Ahroid') return card;
 
@@ -233,16 +392,27 @@ export function HomeDashboardTab({
         })}
       </div>
       <div className="mb-6 -mt-0.5 rounded-2xl border border-primary/20 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-4 py-3 shadow-sm">
-        <p className="text-center text-xs font-black leading-relaxed text-foreground">
-          <span className="text-primary">Dr Ahroid</span> is the only AI in Pakistan trained on actual medical books.
-        </p>
+        <div className="flex min-h-10 items-center justify-center overflow-hidden text-center" aria-live="polite">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.p
+              key={`${drAhroidMessageIndex}-${drAhroidMessages[drAhroidMessageIndex]}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="text-xs font-black leading-relaxed text-foreground"
+            >
+              {drAhroidMessages[drAhroidMessageIndex]}
+            </motion.p>
+          </AnimatePresence>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-6">
         <button
           type="button"
           onClick={onOpenUsageLimits}
-          className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-indigo-500/10 backdrop-blur-sm p-4 text-left active:scale-[0.97] transition-all min-h-[120px] w-full dark:from-violet-500/15 dark:via-purple-500/10 dark:to-indigo-500/15"
+          className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-indigo-500/10 bg-card/80 p-4 text-left active:scale-[0.97] transition-all min-h-[120px] w-full dark:from-violet-500/15 dark:via-purple-500/10 dark:to-indigo-500/15 will-change-transform"
         >
           <div className="flex items-center gap-1.5 mb-2">
             <Gauge className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" />
@@ -260,7 +430,7 @@ export function HomeDashboardTab({
             animate={{ opacity: termLoading ? 0 : 1, y: termLoading ? 4 : 0 }}
             transition={{ duration: 0.25 }}
             onClick={onOpenTerm}
-            className="rounded-2xl border border-border/40 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 backdrop-blur-sm p-4 text-left active:scale-[0.97] transition-all min-h-[120px] w-full"
+            className="rounded-2xl border border-border/40 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 bg-card/80 p-4 text-left active:scale-[0.97] transition-all min-h-[120px] w-full will-change-transform"
             disabled={termLoading || !termOfDay}
           >
             <div className="flex items-center gap-1.5 mb-2">
@@ -282,7 +452,7 @@ export function HomeDashboardTab({
           animate={{ opacity: caseLoading ? 0 : 1, y: caseLoading ? 4 : 0 }}
           transition={{ duration: 0.25 }}
           onClick={onOpenCase}
-          className="w-full rounded-2xl border border-border/40 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 backdrop-blur-sm p-4 text-left active:scale-[0.97] transition-all"
+          className="w-full rounded-2xl border border-border/40 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 bg-card/80 p-4 text-left active:scale-[0.97] transition-all will-change-transform"
           disabled={caseLoading || !caseOfDay}
         >
           <div className="flex items-center gap-1.5 mb-2">
@@ -307,26 +477,22 @@ export function HomeDashboardTab({
           </div>
           <div className="grid grid-cols-2 gap-3 mb-6">
             {instituteModules.map((action) => (
-              <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
+              <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} locked={isPlanLocked(action)} accessLoading={isCheckingPlanAccess(action)} onLockedClick={() => showFeatureLock(action)} />
             ))}
           </div>
         </div>
       )}
 
+      <DashboardAnnouncementCarousel announcements={dashboardAnnouncements} institute={instituteData} onOpen={onOpenAnnouncement} />
+
       {/* Daily Game Section */}
       <div className="mt-6 mb-6">
         <div className="flex items-center gap-2 mb-3">
           <Gamepad2 className="w-4 h-4 text-amber-500 animate-pulse-slow" />
-          <h2 className="text-sm font-bold text-foreground">Daily Game</h2>
+          <h2 className="text-sm font-extrabold text-foreground">Daily Game</h2>
         </div>
         <DailyMedmacsPulseCard profile={profile} isOfflineMode={isOfflineMode} />
       </div>
-
-      {dashboardAnnouncement ? (
-        <DashboardAnnouncementCard announcement={dashboardAnnouncement} onOpen={() => onOpenAnnouncement(dashboardAnnouncement)} />
-      ) : (
-        <InstituteDetailCard institute={instituteData} />
-      )}
 
       <div className="flex items-center gap-2 mb-3 mt-6">
         <Target className="w-4 h-4 text-rose-500" />
@@ -334,7 +500,7 @@ export function HomeDashboardTab({
       </div>
       <div className="grid grid-cols-2 gap-3 mb-6">
         {personalizationActions.map((action) => (
-          <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} />
+          <DashboardActionCard key={action.title} action={action} fixedHeight soft offlineMode={isOfflineMode} locked={isPlanLocked(action)} accessLoading={isCheckingPlanAccess(action)} onLockedClick={() => showFeatureLock(action)} />
         ))}
       </div>
 
@@ -344,14 +510,12 @@ export function HomeDashboardTab({
       </div>
       <div className="mb-8 divide-y divide-border/40 rounded-2xl">
         {premiumPerks.map((action) => {
-          const isDisabled = action.disabled || (isOfflineMode && action.link !== '/mcqs');
+          const locked = isPlanLocked(action);
+          const accessLoading = isCheckingPlanAccess(action);
+          const isDisabled = action.disabled || accessLoading || (isOfflineMode && action.link !== '/mcqs' && !locked);
           const Icon = action.icon;
-          return (
-            <Link
-              key={action.title}
-              to={isDisabled ? '#' : action.link || '#'}
-              className={`flex items-center gap-3 px-4 py-3.5 transition-colors active:bg-muted/50 ${isDisabled ? 'pointer-events-none opacity-45 grayscale' : ''}`}
-            >
+          const rowContent = (
+            <>
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${action.gradient} text-white shadow-sm`}>
                 <Icon className="h-5 w-5" />
               </div>
@@ -359,7 +523,25 @@ export function HomeDashboardTab({
                 <h3 className="text-sm font-bold text-foreground leading-tight">{action.title}</h3>
                 <p className="text-[11px] text-muted-foreground font-medium mt-0.5">{action.description}</p>
               </div>
-              <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+              {locked ? <Lock className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" /> : <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />}
+            </>
+          );
+          const rowClassName = `flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors active:bg-muted/50 ${isDisabled ? 'pointer-events-none opacity-45 grayscale' : ''}`;
+
+          return locked ? (
+            <button key={action.title} type="button" onClick={() => showFeatureLock(action)} disabled={action.disabled} aria-label={`Unlock ${action.title}`} className={rowClassName}>
+              {rowContent}
+            </button>
+          ) : (
+            <Link
+              key={action.title}
+              to={isDisabled ? '#' : action.link || '#'}
+              onClick={(event) => {
+                if (!isDisabled && action.link) navigateWithCardExpansion(event, () => navigate(action.link!), event.currentTarget);
+              }}
+              className={rowClassName}
+            >
+              {rowContent}
             </Link>
           );
         })}
@@ -423,6 +605,8 @@ export function HomeDashboardTab({
           </div>
         </div>
       )}
+
+      <StudentInstituteRankingCard profile={profile} />
 
       <div className="mb-6 border-t border-border/30 pt-4">
         <div className="flex items-center justify-center gap-5">

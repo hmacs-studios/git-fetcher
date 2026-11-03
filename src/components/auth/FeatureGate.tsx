@@ -27,16 +27,7 @@ export const FeatureGate: React.FC<FeatureGateProps> = ({ feature, title, childr
 
   if (!isAccessible) {
     return (
-      <div className="relative min-h-screen w-full overflow-hidden">
-        {/* Backdrop: Original page content rendered in inaccessible blurred state */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none select-none filter blur-sm opacity-40 max-h-screen overflow-hidden transition-all duration-300"
-        >
-          {children}
-        </div>
-
-        {/* Feature Lock Bottom Sheet */}
+      <div className="min-h-screen w-full bg-background">
         <FeatureLockModal
           open={showModal}
           onClose={() => setShowModal(false)}

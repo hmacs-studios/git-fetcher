@@ -121,8 +121,8 @@ const SEQChapterSelectionPage = () => {
       <div className="relative z-10 mx-auto w-full max-w-2xl px-4 sm:px-0">
         <div className="py-5">
           <p className="truncate text-[10px] font-bold uppercase tracking-[0.25em] text-amber-600/90 dark:text-amber-500/90">{subject?.name}</p>
-          <h2 className="font-['Syne'] mt-1.5 text-2xl font-bold uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]">
-            Select <span className="text-amber-600 dark:text-amber-500">Chapter</span>
+          <h2 className="font-['Bricolage_Grotesque'] mt-1.5 text-2xl font-bold uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]">
+            Select <span className="text-amber-600 dark:text-amber-400">Chapter</span>
           </h2>
           <p className="mt-2 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
             {profile?.plan === 'free' ? 'Free daily limits apply' : 'Unlimited premium access'}
@@ -199,7 +199,7 @@ const SEQChapterSelectionPage = () => {
 
           <footer className="py-6 text-center">
             <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground/40">
-              © 2026 Medmacs App
+              © 2026 Medmacs
             </p>
           </footer>
         </div>

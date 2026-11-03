@@ -392,7 +392,7 @@ const AITestGenerator: React.FC = () => {
 
     return (
         <div className="fixed inset-0 bg-background flex flex-col overflow-hidden">
-            <Seo title="AI Test Generator" description="Create custom AI practice tests on Medmacs App." canonical="https://medistics.app/ai/test-generator" />
+            <Seo title="AI Test Generator" description="Create custom AI practice tests on Medmacs." canonical="https://medmacs.app/ai/test-generator" />
 
             {/* Background decoration */}
             <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-primary/5 rounded-full blur-[120px] pointer-events-none" />
@@ -595,7 +595,7 @@ const AITestGenerator: React.FC = () => {
                             </AnimatePresence>
 
                             <div className="text-center pt-20 pb-10 opacity-40">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs App • AI Test Generator</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs • AI Test Generator</p>
                             </div>
                         </div>
                     )}
@@ -743,7 +743,7 @@ const AITestGenerator: React.FC = () => {
                             </AnimatePresence>
 
                             <div className="text-center pt-20 pb-10 opacity-40">
-                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs App • AI Test Generator</p>
+                                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs • AI Test Generator</p>
                             </div>
                         </div>
                     )}
@@ -1212,7 +1212,7 @@ const AITestGenerator: React.FC = () => {
                                     <AlertTriangle className="w-8 h-8 text-red-500" />
                                 </div>
                                 <SheetHeader className="text-center sm:text-center">
-                                    <SheetTitle className="text-xl font-bold font-syne">Leave Session?</SheetTitle>
+                                    <SheetTitle className="text-xl font-bold font-['Bricolage_Grotesque']">Leave Session?</SheetTitle>
                                     <SheetDescription className="text-sm text-zinc-500 dark:text-zinc-400">
                                         Your progress will be lost if you leave this session.
                                     </SheetDescription>

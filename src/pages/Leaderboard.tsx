@@ -12,9 +12,7 @@ import PageSkeleton from '@/components/skeletons/PageSkeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchInstitutes, getInstituteByCode, getInstituteDisplayName, isSpecializedTestInstitute } from '@/utils/institutes';
-
-type LeaderboardScope = 'pakistan' | 'institute' | 'year-campus';
-type LeaderboardPeriod = 'all-time' | 'monthly' | 'weekly';
+import { fetchLeaderboardEntries, leaderboardQueryKey, type LeaderboardEntry, type LeaderboardPeriod, type LeaderboardScope } from '@/services/leaderboard';
 
 type LeaderboardProfile = {
     id: string;
@@ -24,18 +22,6 @@ type LeaderboardProfile = {
     plan?: string | null;
     institute: string | null;
     year: string | null;
-};
-
-type LeaderboardEntry = {
-    id: string;
-    user_id: string;
-    username: string;
-    avatar_url: string | null;
-    total_score: number;
-    accuracy: number;
-    best_streak: number;
-    total_questions: number;
-    correct_answers: number;
 };
 
 const PERIOD_LABELS: Record<LeaderboardPeriod, string> = {
@@ -144,87 +130,21 @@ const Leaderboard = () => {
 
     const hasInstituteScope = !!currentProfile?.institute;
     const hasYearCampusScope = !!currentProfile?.institute && !!currentProfile?.year && !selectedSpecializedTest;
-
     useEffect(() => {
         if (activeScope === 'institute' && !hasInstituteScope) setActiveScope('pakistan');
         if (activeScope === 'year-campus' && !hasYearCampusScope) setActiveScope('pakistan');
     }, [activeScope, hasInstituteScope, hasYearCampusScope]);
 
     const { data: leaderboardData = [], isLoading } = useQuery<LeaderboardEntry[]>({
-        queryKey: ['leaderboard', activeScope, activePeriod, currentProfile?.institute, currentProfile?.year],
-        queryFn: async () => {
-            try {
-                const periodRange = getPakistanPeriodRange(activePeriod);
-                const { data: userAnswers, error: answersError } = await supabase
-                    .from('user_answers')
-                    .select('user_id, is_correct, time_taken, created_at');
-                if (answersError) return [];
-
-                const { data: profiles, error: profilesError } = await supabase
-                    .from('profiles')
-                    .select('id, username, full_name, avatar_url, institute, year');
-                if (profilesError) return [];
-
-                const scopedProfiles = (profiles as LeaderboardProfile[]).filter(profile => {
-                    if (activeScope === 'institute') return !!currentProfile?.institute && profile.institute === currentProfile.institute;
-                    if (activeScope === 'year-campus') {
-                        return !!currentProfile?.institute && !!currentProfile?.year
-                            && profile.institute === currentProfile.institute
-                            && profile.year === currentProfile.year;
-                    }
-                    return true;
-                });
-                const scopedProfileIds = new Set(scopedProfiles.map(profile => profile.id));
-
-                const userStats: Record<string, any> = {};
-                userAnswers
-                    ?.filter(answer => {
-                        if (!scopedProfileIds.has(answer.user_id)) return false;
-                        if (!periodRange) return true;
-                        const answerDate = new Date(answer.created_at);
-                        return answerDate >= periodRange.start && answerDate < periodRange.end;
-                    })
-                    .forEach(answer => {
-                        if (!userStats[answer.user_id]) {
-                            userStats[answer.user_id] = { user_id: answer.user_id, totalQuestions: 0, correctAnswers: 0, totalTime: 0, answers: [] };
-                        }
-                        userStats[answer.user_id].totalQuestions++;
-                        if (answer.is_correct) userStats[answer.user_id].correctAnswers++;
-                        userStats[answer.user_id].totalTime += answer.time_taken || 0;
-                        userStats[answer.user_id].answers.push(answer);
-                    });
-
-                const leaderboardEntries = scopedProfiles
-                    ?.filter(profile => userStats[profile.id]?.totalQuestions > 0)
-                    .map(profile => {
-                        const stats = userStats[profile.id];
-                        let currentStreak = 0, bestStreak = 0;
-                        stats.answers
-                            .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                            .forEach((answer: any) => {
-                                if (answer.is_correct) { currentStreak++; bestStreak = Math.max(bestStreak, currentStreak); }
-                                else { currentStreak = 0; }
-                            });
-                        const accuracy = stats.totalQuestions > 0 ? Math.round((stats.correctAnswers / stats.totalQuestions) * 100) : 0;
-                        const averageTime = stats.totalQuestions > 0 ? Math.round(stats.totalTime / stats.totalQuestions) : 0;
-                        const totalScore = stats.correctAnswers * 10 + bestStreak * 5 + accuracy + Math.max(0, 60 - averageTime);
-                        return {
-                            id: profile.id, user_id: profile.id,
-                            username: profile.username || profile.full_name || 'Anonymous',
-                            avatar_url: profile.avatar_url,
-                            total_score: totalScore, accuracy, best_streak: bestStreak,
-                            total_questions: stats.totalQuestions, correct_answers: stats.correctAnswers
-                        };
-                    }) || [];
-
-                return leaderboardEntries.sort((a, b) => b.total_score - a.total_score).slice(0, 50);
-            } catch (error) { return []; }
-        },
-        enabled: activeScope === 'pakistan' || !!currentProfile,
+        queryKey: leaderboardQueryKey(user?.id, activeScope, activePeriod, currentProfile?.institute, currentProfile?.year),
+        queryFn: () => fetchLeaderboardEntries(activeScope, activePeriod, user?.id),
+        enabled: !!user?.id && (activeScope === 'pakistan' || !!currentProfile),
+        staleTime: 1000 * 60,
     });
 
-    const userRank = leaderboardData.findIndex(entry => entry.user_id === user?.id) + 1;
+    const visibleLeaders = leaderboardData.filter(entry => entry.rank_position <= 50);
     const currentUserData = leaderboardData.find(entry => entry.user_id === user?.id);
+    const userRank = currentUserData?.rank_position || 0;
 
     const activeScopeLabel = useMemo(() => {
         if (activeScope === 'institute') return instituteName;
@@ -261,22 +181,16 @@ const Leaderboard = () => {
 
     return (
         <div className="min-h-screen w-full bg-background">
-            <Seo title="Leaderboard" description="See how you rank against other students on Medmacs App's leaderboard." canonical="https://medmacs.app/leaderboard" />
+            <Seo title="Leaderboard" description="See how you rank against other students on the Medmacs leaderboard." canonical="https://medmacs.app/leaderboard" />
 
             <div
                 ref={headerRef}
-                className={`fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/40 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
+                className={`fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/40 pt-[env(safe-area-inset-top)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
             >
-                <div className="container mx-auto px-4 lg:px-8 py-4 flex justify-between items-center">
-                    <Link to="/dashboard" className="flex items-center space-x-2 text-primary hover:text-primary/80 transition-colors">
-                        <ArrowLeft className="w-4 h-4" />
-                    </Link>
-                    <div className="flex items-center space-x-3">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs Logo" className="w-6 h-6 md:w-8 md:h-8 object-contain" />
-                        <span className="text-lg md:text-xl font-bold text-foreground">Leaderboard</span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                        <PlanBadge plan={currentProfile?.plan || undefined} />
+                <div className="container mx-auto grid h-14 grid-cols-[1fr_auto_1fr] items-center px-4 lg:px-8">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">Leaderboard</h1>
+                    <div className="flex items-center justify-self-end">
                         <ProfileDropdown />
                     </div>
                 </div>
@@ -284,11 +198,11 @@ const Leaderboard = () => {
 
             <div className="container mx-auto px-4 lg:px-8 py-6 lg:py-8 mt-[var(--header-height)]">
                 <div className="text-center mb-6 lg:mb-8 animate-fade-in">
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-foreground mb-4">
+                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-black tracking-tight text-foreground mb-3">
                         🏆 Leaderboard
                     </h1>
-                    <p className="text-base md:text-lg lg:text-xl text-muted-foreground max-w-2xl mx-auto">
-                        See how you rank against the best medical students in Pakistan.
+                    <p className="text-sm md:text-base lg:text-lg font-medium text-muted-foreground max-w-2xl mx-auto">
+                        Track your progress, compare scores, and climb the rankings with every practice session.
                     </p>
                 </div>
 
@@ -301,7 +215,7 @@ const Leaderboard = () => {
                             </TabsTrigger>
                             <TabsTrigger disabled={!hasInstituteScope} value="institute" className="rounded-xl px-2 py-2 text-[11px] font-bold sm:text-sm">
                                 <School className="mr-1.5 h-3.5 w-3.5" />
-                                {selectedSpecializedTest ? 'Your Test' : 'Your Institute'}
+                                {selectedSpecializedTest ? 'Post Graduate Exams' : 'Your Institute'}
                             </TabsTrigger>
                             <TabsTrigger disabled={!hasYearCampusScope} value="year-campus" className="rounded-xl px-2 py-2 text-[11px] font-bold sm:text-sm">
                                 <Target className="mr-1.5 h-3.5 w-3.5" />
@@ -375,9 +289,9 @@ const Leaderboard = () => {
                     </Card>
                 )}
 
-                {leaderboardData.length > 0 && (
+                {visibleLeaders.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
-                        {leaderboardData.slice(0, 3).map((entry, index) => (
+                        {visibleLeaders.slice(0, 3).map((entry, index) => (
                             <Card
                                 key={entry.id}
                                 className={`relative overflow-hidden hover:scale-105 transition-all duration-300 animate-fade-in bg-gradient-to-br from-primary/5 to-accent border-border backdrop-blur-sm ${index === 0 ? 'md:order-2' : index === 1 ? 'md:order-1' : 'md:order-3'
@@ -415,7 +329,7 @@ const Leaderboard = () => {
                     <CardHeader className="p-4 lg:p-6">
                         <CardTitle className="flex items-center space-x-2 text-foreground text-lg md:text-xl">
                             <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                            <span>Top Students</span>
+                        <span>Top Students</span>
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-4 lg:p-6 pt-0">
@@ -423,13 +337,13 @@ const Leaderboard = () => {
                             <div className="space-y-4">
                                 <PageSkeleton />
                             </div>
-                        ) : leaderboardData.length === 0 ? (
+                        ) : visibleLeaders.length === 0 ? (
                             <div className="text-center py-8">
                                 <p className="text-muted-foreground text-sm md:text-base">{emptyStateMessage}</p>
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                {leaderboardData.slice(3).map((entry, index) => (
+                                {visibleLeaders.slice(3).map((entry, index) => (
                                     <div
                                         key={entry.id}
                                         className="flex items-center space-x-3 md:space-x-4 p-3 rounded-lg bg-card/60 hover:bg-accent/50 transition-all duration-300 border border-border/40 backdrop-blur-sm"

@@ -18,7 +18,9 @@ import {
   readCachedChapters,
   setStoredScopeKey,
 } from '@/utils/mcqContentCache';
+export { getStoredScopeKey, readCachedChapters };
 import { logMCQDiagnostic } from '@/utils/mcqDiagnostics';
+import { isSpecializedTestCode } from '@/utils/institutes';
 
 const backgroundRefreshAt = new Map<string, number>();
 const BACKGROUND_REFRESH_INTERVAL_MS = 10 * 60 * 1000;
@@ -37,8 +39,11 @@ export interface Subject {
   icon: string;
   color: string;
   year: string;
+  program_code?: string | null;
   institutes?: string[];
   free_unlimited_access?: boolean;
+  chapter_count?: number;
+  past_paper_chapter_count?: number;
 }
 
 export interface Chapter {
@@ -89,6 +94,8 @@ export interface SEQ {
   model_answer: string;
   explanation: string;
   chapter_id: string;
+  broad_answer?: string;
+  keywords?: string[];
 }
 
 export interface SEQEvaluationResult {
@@ -120,11 +127,28 @@ const hasExplicitProfileYear = async (): Promise<boolean> => {
     .eq('id', authData.user.id)
     .maybeSingle();
 
-  if (profileError) return false;
+  if (profileError || !profile) return false;
   
-  if (profile?.institute === 'nre' || profile?.institute === 'nle') return true;
+  const institute = String(profile.institute || '').trim().toLowerCase();
+  if (isSpecializedTestCode(institute)) {
+    // If the test has no specialty years configured (like NRE, JPMC House Job Test, etc.), year is not required
+    const { data: instData } = await supabase
+      .from('institutes')
+      .select('years, category')
+      .ilike('code', institute)
+      .maybeSingle();
 
-  return String(profile?.year || '').trim().length > 0;
+    if (instData?.category === 'specialized_test' && (!instData.years || instData.years.length === 0)) {
+      return true;
+    }
+    // If it has specialties (like FCPS Part-1), ensure one was selected
+    if (instData?.years && instData.years.length > 0) {
+      return String(profile.year || '').trim().length > 0;
+    }
+    return true;
+  }
+
+  return String(profile.year || '').trim().length > 0;
 };
 
 const getCurrentProfileScopeTag = async (): Promise<string | null> => {
@@ -134,13 +158,16 @@ const getCurrentProfileScopeTag = async (): Promise<string | null> => {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('institute, year')
+      .select('institute, year, program_code')
       .eq('id', authData.user.id)
       .maybeSingle();
 
     const institute = String(profile?.institute || '').trim().toLowerCase();
+    const program = isSpecializedTestCode(institute)
+      ? 'specialized'
+      : String(profile?.program_code || 'mbbs').trim().toLowerCase();
     const year = String(profile?.year || '').trim().toLowerCase();
-    return `${authData.user.id}:${institute}:${year}`;
+    return `${authData.user.id}:${institute}:${program}:${year}`;
   } catch {
     return null;
   }
@@ -330,6 +357,22 @@ export const fetchChaptersBySubject = async (subjectId: string): Promise<Chapter
     .sort((a, b) => a.chapter_number - b.chapter_number);
   cacheChapters(subjectId, chapters, scopeKey);
   return chapters;
+};
+
+export const fetchSubjectDirectory = async (
+  subjectId: string,
+): Promise<{ subject: Subject; chapters: Chapter[] } | null> => {
+  try {
+    const [chapters, subject] = await Promise.all([
+      fetchChaptersBySubject(subjectId),
+      fetchSubjectById(subjectId),
+    ]);
+    if (!subject) return null;
+    return { subject, chapters };
+  } catch (error) {
+    console.error('fetchSubjectDirectory error:', error);
+    return null;
+  }
 };
 
 export const fetchChapterById = async (chapterId: string, subjectId?: string): Promise<Chapter | null> => {
@@ -617,7 +660,9 @@ export const fetchRandomSEQ = async (chapterId: string): Promise<SEQ | null> => 
 export const evaluateSEQAnswer = async (
   userAnswer: string,
   question: string,
-  bookReferences: string
+  bookReferences: string,
+  accurateAnswer?: string,
+  keywords?: string[]
 ): Promise<SEQEvaluationResult> => {
   try {
     const data = await aiApiJson<Partial<SEQEvaluationResult>>('seq_ai', {

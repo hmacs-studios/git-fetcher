@@ -336,7 +336,7 @@ const FLP = () => {
                   </span>
                   <p className="text-[11px] font-black uppercase tracking-[0.24em] text-primary">Generating Exam</p>
                 </div>
-                <SheetTitle className="text-2xl font-extrabold tracking-tight brand-syne">
+                <SheetTitle className="text-2xl font-extrabold tracking-tight brand-display">
                   {fetchMessages[msgIdx]}
                 </SheetTitle>
                 <SheetDescription className="text-xs text-muted-foreground">
@@ -381,10 +381,7 @@ const FLP = () => {
       >
         <header className="flex items-center justify-between w-full shrink-0 mb-2">
           <div className="flex items-center gap-2.5">
-            <span className="font-['Syne'] text-lg font-extrabold tracking-[-.045em]">
-              <span className="bg-gradient-to-r from-[#2dd4bf] to-[#0ea5e9] bg-clip-text text-transparent">Medmacs</span>
-              <span className="text-slate-950 dark:text-white">.app</span>
-            </span>
+            <span className="brand-wordmark text-xl text-foreground">Medmacs</span>
           </div>
           <button
             onClick={() => {
@@ -412,9 +409,9 @@ const FLP = () => {
                   <motion.h1
                     initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                    className="font-['Syne'] text-[clamp(1.7rem,6.4vw,2.2rem)] font-extrabold leading-[1.02] tracking-[-.05em] text-slate-950 dark:text-white"
+                    className="font-['Bricolage_Grotesque'] text-[clamp(1.7rem,6.4vw,2.2rem)] font-extrabold leading-[1.02] tracking-[-.05em] text-slate-950 dark:text-white"
                   >
-                    Full-Length Papers
+                    Full-Length <span className="text-teal-600 dark:text-teal-300">Papers</span>
                   </motion.h1>
                   <motion.p
                     initial={{ opacity: 0, y: 14, filter: "blur(6px)" }}
@@ -483,7 +480,7 @@ const FLP = () => {
                 >
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>
-                <h2 className="font-['Syne'] text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
+                <h2 className="font-['Bricolage_Grotesque'] text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
                   Choose Question Count
                 </h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -539,7 +536,7 @@ const FLP = () => {
                 >
                   <ChevronLeft className="w-4 h-4" /> Back
                 </button>
-                <h2 className="font-['Syne'] text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
+                <h2 className="font-['Bricolage_Grotesque'] text-2xl font-extrabold text-slate-950 dark:text-white tracking-tight">
                   Select Subject
                 </h2>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">

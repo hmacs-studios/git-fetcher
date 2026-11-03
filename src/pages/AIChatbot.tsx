@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from 'next-themes';
-import { Send, Mic, MicOff, LockKeyhole, MessageSquare, Menu, Copy, Clock, Plus, PlusCircle, Trash2, Loader2, Volume2, Sparkles } from 'lucide-react';
+import { Send, Mic, MicOff, LockKeyhole, MessageSquare, Menu, Copy, Clock, Plus, PlusCircle, Trash2, Loader2, Volume2, Sparkles, UserRound } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CardTitle } from '@/components/ui/card';
@@ -12,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import Seo from '@/components/Seo';
 import { notifyAchievementProgress } from '@/components/profile/AchievementBadges';
 import { motion } from 'framer-motion';
-import { aiApiStream, type AiStreamStatus } from '@/utils/aiApi';
+import { aiApiFetch, aiApiStream, type AiStreamStatus } from '@/utils/aiApi';
 import { transcribeAudio, synthesizeSpeech, splitSpeechText, getBestAudioMimeType, createSilenceDetector, type SilenceDetectorController } from '@/utils/cloudSpeech';
 import { isAiPolicyNotice } from '@/utils/aiPolicyNotice';
 import BrandedLoader from '@/components/BrandedLoader';
@@ -32,6 +33,10 @@ interface ChatMessage {
   text: string;
   time: string;
 }
+
+type ChatPreferences = { length: 'concise' | 'standard' | 'detailed'; style: 'exam' | 'conceptual' | 'socratic'; memoryEnabled: boolean; customInstructions: string };
+type SavedMemory = { id: string; summary: string; category: string };
+const defaultChatPreferences: ChatPreferences = { length: 'standard', style: 'exam', memoryEnabled: true, customInstructions: '' };
 
 interface SavedChat {
   id: string;
@@ -117,6 +122,11 @@ const DrSultanChat: React.FC = () => {
   const [playingAudioIndex, setPlayingAudioIndex] = useState<number | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [personalizeOpen, setPersonalizeOpen] = useState(false);
+  const [chatPreferences, setChatPreferences] = useState<ChatPreferences>(defaultChatPreferences);
+  const [savedMemories, setSavedMemories] = useState<SavedMemory[]>([]);
+  const [memoriesLoading, setMemoriesLoading] = useState(false);
+  const [memoryError, setMemoryError] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [suggestionTick, setSuggestionTick] = useState(0);
@@ -192,6 +202,48 @@ const DrSultanChat: React.FC = () => {
     },
     enabled: !!user?.id
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const saved = localStorage.getItem(`medmacs-ai-preferences:${user.id}`);
+      const parsed = saved ? JSON.parse(saved) as Partial<ChatPreferences> & { language?: unknown } : {};
+      const sanitized: ChatPreferences = {
+        length: ['concise', 'standard', 'detailed'].includes(String(parsed.length)) ? parsed.length as ChatPreferences['length'] : defaultChatPreferences.length,
+        style: ['exam', 'conceptual', 'socratic'].includes(String(parsed.style)) ? parsed.style as ChatPreferences['style'] : defaultChatPreferences.style,
+        memoryEnabled: typeof parsed.memoryEnabled === 'boolean' ? parsed.memoryEnabled : defaultChatPreferences.memoryEnabled,
+        customInstructions: typeof parsed.customInstructions === 'string' ? parsed.customInstructions.slice(0, 500) : '',
+      };
+      setChatPreferences(sanitized);
+      // Rewrite legacy preferences so a previously selected language can no
+      // longer override language inferred from memory and the current message.
+      localStorage.setItem(`medmacs-ai-preferences:${user.id}`, JSON.stringify(sanitized));
+    } catch { setChatPreferences(defaultChatPreferences); }
+  }, [user?.id]);
+
+  const updateChatPreferences = (next: ChatPreferences) => {
+    setChatPreferences(next);
+    if (user?.id) localStorage.setItem(`medmacs-ai-preferences:${user.id}`, JSON.stringify(next));
+  };
+
+  const loadMemories = async () => {
+    setMemoriesLoading(true);
+    setMemoryError('');
+    try {
+      const response = await aiApiFetch('ai/memories', { method: 'GET' });
+      const data = await response.json() as { memories: SavedMemory[] };
+      setSavedMemories(data.memories || []);
+    } catch (error) { setMemoryError(error instanceof Error ? error.message : 'Could not load memories.'); }
+    finally { setMemoriesLoading(false); }
+  };
+
+  const manageMemory = async (method: 'PATCH' | 'DELETE', body: Record<string, unknown>) => {
+    setMemoryError('');
+    try {
+      await aiApiFetch('ai/memories', { method, body: JSON.stringify(body) });
+      await loadMemories();
+    } catch (error) { setMemoryError(error instanceof Error ? error.message : 'Could not update memory.'); }
+  };
 
   const { data: chatHistory, isLoading: chatHistoryLoading } = useQuery({
     queryKey: ['chatHistory', user?.id],
@@ -331,6 +383,7 @@ const DrSultanChat: React.FC = () => {
       const payload = await aiApiStream('ai/study-chat', {
         question: trimmedInput,
         history: historyTurns,
+        preferences: chatPreferences,
       }, {
         onStatus: (status) => { setLoadingStatus(status); },
         onDelta: (text) => {
@@ -668,6 +721,43 @@ const DrSultanChat: React.FC = () => {
     >
       <Seo title="Dr. Ahroid | AI Tutor" />
 
+      <Dialog open={personalizeOpen} onOpenChange={open => { setPersonalizeOpen(open); if (open) void loadMemories(); }}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-2xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Personalize Dr. Ahroid</DialogTitle>
+            <DialogDescription>Choose how explanations sound and whether your saved study memory is used.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 text-sm">
+            {([
+              ['length', 'Answer length', ['concise', 'standard', 'detailed']],
+              ['style', 'Learning style', ['exam', 'conceptual', 'socratic']],
+            ] as const).map(([field, label, options]) => (
+              <fieldset key={field} className="space-y-2">
+                <legend className="font-semibold">{label}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {options.map(option => <button key={option} type="button" aria-pressed={chatPreferences[field] === option} onClick={() => updateChatPreferences({ ...chatPreferences, [field]: option })} className={`rounded-full border px-3 py-1.5 capitalize transition-colors ${chatPreferences[field] === option ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground hover:bg-muted'}`}>{option}</button>)}
+                </div>
+              </fieldset>
+            ))}
+            <label className="flex items-start gap-3 rounded-xl border border-border p-3">
+              <input type="checkbox" checked={chatPreferences.memoryEnabled} onChange={event => updateChatPreferences({ ...chatPreferences, memoryEnabled: event.target.checked })} className="mt-1 accent-teal-600" />
+              <span><span className="block font-semibold">Use study memory</span><span className="text-muted-foreground">Allow Dr. Ahroid to recall and save study preferences when you ask.</span></span>
+            </label>
+            <div className="space-y-2">
+              <label htmlFor="ai-custom-instructions" className="font-semibold">Custom instructions</label>
+              <textarea id="ai-custom-instructions" value={chatPreferences.customInstructions} maxLength={500} onChange={event => updateChatPreferences({ ...chatPreferences, customInstructions: event.target.value })} placeholder="Example: Explain concepts with brief clinical examples." className="min-h-24 w-full rounded-xl border border-border bg-background p-3 text-foreground" />
+              <p className="text-xs text-muted-foreground">Answer style only. Medical safety, privacy, and citation rules always apply. {chatPreferences.customInstructions.length}/500</p>
+            </div>
+            <section className="space-y-3 border-t border-border pt-4">
+              <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">Saved memories</h3><button type="button" onClick={() => void loadMemories()} className="text-xs font-semibold text-primary">Refresh</button></div>
+              {memoryError && <p role="alert" className="text-xs text-destructive">{memoryError}</p>}
+              {memoriesLoading ? <p className="text-xs text-muted-foreground">Loading memories…</p> : savedMemories.length ? <div className="max-h-48 space-y-2 overflow-y-auto">{savedMemories.map(memory => <div key={memory.id} className="rounded-xl border border-border p-3"><p className="text-xs text-muted-foreground capitalize">{memory.category.replace(/_/g, ' ')}</p><p className="my-1 break-words">{memory.summary}</p><div className="flex gap-4 text-xs font-semibold"><button type="button" className="text-primary" onClick={() => { const summary = window.prompt('Edit memory', memory.summary); if (summary?.trim()) void manageMemory('PATCH', { id: memory.id, summary }); }}>Edit</button><button type="button" className="text-destructive" onClick={() => { if (window.confirm('Remove this memory?')) void manageMemory('DELETE', { id: memory.id }); }}>Remove</button></div></div>)}</div> : <p className="text-xs text-muted-foreground">No saved memories yet.</p>}
+              {savedMemories.length > 0 && <button type="button" className="text-xs font-semibold text-destructive" onClick={() => { if (window.confirm('Remove all saved memories?')) void manageMemory('DELETE', { all: true }); }}>Clear all memories</button>}
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* DELETE MODAL */}
       <AlertDialog open={!!sessionToDelete} onOpenChange={() => setSessionToDelete(null)}>
         <AlertDialogContent className="rounded-3xl border-border bg-background">
@@ -690,7 +780,7 @@ const DrSultanChat: React.FC = () => {
         >
           <div className="flex flex-col">
             <span className="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-1">Study History</span>
-            <span className="font-['Syne'] text-xl font-extrabold leading-none tracking-[-0.035em]">Your <span className="text-primary">Chats</span></span>
+            <span className="font-['Bricolage_Grotesque'] text-xl font-extrabold leading-none tracking-[-0.035em]">Your <span className="text-primary">Chats</span></span>
           </div>
           <Button variant="ghost" size="icon" onClick={startNewChat} className="rounded-xl hover:bg-primary/10 hover:text-primary"><PlusCircle className="w-6 h-6" /></Button>
         </div>
@@ -753,9 +843,9 @@ const DrSultanChat: React.FC = () => {
         </div>
 
         <div className="p-4 border-t bg-gradient-to-t from-pink-100/80 to-transparent dark:from-purple-950/70 dark:to-transparent">
-          <Button variant="outline" className="h-12 w-full justify-start gap-3 rounded-xl border-border font-['Syne'] shadow-sm transition-colors hover:border-primary hover:bg-primary/5" onClick={startNewChat}>
-            <PlusCircle className="w-4 h-4 text-primary" />
-            <span className="text-xs font-bold">New conversation</span>
+          <Button variant="outline" className="h-12 w-full justify-start gap-3 rounded-xl border-border font-['Bricolage_Grotesque'] shadow-sm transition-colors hover:border-primary hover:bg-primary/5" onClick={() => setPersonalizeOpen(true)}>
+            {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" /> : <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRound className="h-4 w-4" /></span>}
+            <span className="text-xs font-bold">Personalize</span>
           </Button>
         </div>
       </aside>
@@ -778,7 +868,7 @@ const DrSultanChat: React.FC = () => {
                 <img src="/lovable-uploads/Mascot-mini.png" alt="Dr. Ahroid" className="h-full w-full object-contain" />
               </div>
               <div className="flex flex-col">
-                <CardTitle className="font-['Syne'] text-lg font-extrabold tracking-[-0.035em]">Dr. <span className="text-primary">Ahroid</span></CardTitle>
+                <CardTitle className="font-['Bricolage_Grotesque'] text-lg font-extrabold tracking-[-0.035em]">Dr. <span className="text-primary">Ahroid</span></CardTitle>
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                   <span className="text-[10px] text-green-500 font-black uppercase tracking-[0.2em]">Always Online</span>
@@ -815,7 +905,7 @@ const DrSultanChat: React.FC = () => {
                     <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-full w-full object-contain" />
                   </div>
                 </div>
-                <h2 className="mb-2 font-['Syne'] text-2xl font-extrabold tracking-[-0.04em]">Your AI <span className="text-primary">Mentor</span></h2>
+                <h2 className="mb-2 font-['Bricolage_Grotesque'] text-2xl font-extrabold tracking-[-0.04em]">Your AI <span className="text-primary">Mentor</span></h2>
                 <p className="text-sm text-muted-foreground font-medium max-w-sm mb-6">Ask about anatomy, pharmacology, procedures, or test cases.</p>
                 {canUseChat && (
                   <div className="grid grid-cols-2 gap-2 w-full max-w-md">
@@ -1109,7 +1199,7 @@ const DrSultanChat: React.FC = () => {
               </form>
             </>
           )}
-          <p className="mt-3 text-center font-['Syne'] text-[9px] font-bold tracking-wide text-muted-foreground/45">Dr Ahroid is trained on syllabus course.</p>
+          <p className="mt-3 text-center font-['Bricolage_Grotesque'] text-[9px] font-bold tracking-wide text-muted-foreground/45">Dr Ahroid is trained on syllabus course.</p>
         </div>
         </footer>
       </main>

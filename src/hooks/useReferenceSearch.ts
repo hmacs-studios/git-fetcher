@@ -7,14 +7,18 @@ export function useReferenceSearch() {
     const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<ReferenceResponse | null>(null);
 
-    const search = useCallback(async (query: string, topK = 5) => {
+    const search = useCallback(async (query: string, topK = 5, program?: string) => {
         if (!query.trim()) return;
         setLoading(true);
         setError(null);
         try {
             // Use medmacs-ai gateway (works everywhere — web, Capacitor, dev)
             // silentLimitError: true prevents quota popups for reference search
-            const result = await aiApiJson<ReferenceResponse>('reference', { query, top_k: topK }, { silentLimitError: true });
+            const payload: Record<string, any> = { query, top_k: topK };
+            if (program) {
+                payload.program = String(program).trim().toLowerCase() === 'pharm_d' ? 'pharm_d' : 'mbbs';
+            }
+            const result = await aiApiJson<ReferenceResponse>('reference', payload, { silentLimitError: true });
             if (result && (result as any).error) {
                 setError((result as any).error);
                 setData(null);

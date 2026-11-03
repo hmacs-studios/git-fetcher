@@ -281,11 +281,10 @@ const Checkout = () => {
         <div className="min-h-screen w-full bg-background">
             <Seo title="Checkout - Medmacs" description="Complete your subscription purchase." canonical="https://medmacs.app/checkout" />
             <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border transition-transform duration-300">
-                <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-                    <Link to="/pricing" className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                        <ArrowLeft className="w-4 h-4 mr-2" /> Back to Plans
-                    </Link>
-                    <ProfileDropdown />
+                <div className="mx-auto grid h-14 max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">Checkout</h1>
+                    <div className="justify-self-end"><ProfileDropdown /></div>
                 </div>
             </header>
 

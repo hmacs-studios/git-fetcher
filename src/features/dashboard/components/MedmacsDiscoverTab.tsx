@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Heart,
   MessageSquare,
@@ -63,6 +64,7 @@ const DEFAULT_PRODUCTION_COMMENTS: Record<string, ReelComment[]> = {};
 
 export const MedmacsDiscoverTab: React.FC<{ active?: boolean }> = ({ active }) => {
   const { user } = useAuth();
+  const prefersReducedMotion = useReducedMotion();
   const [reels, setReels] = useState<ClinicalReel[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,8 +84,6 @@ export const MedmacsDiscoverTab: React.FC<{ active?: boolean }> = ({ active }) =
   const [newCommentInput, setNewCommentInput] = useState('');
   const [showDrAhroid, setShowDrAhroid] = useState(false);
   const [myAvatar, setMyAvatar] = useState<string | undefined>(undefined);
-  const [userYear, setUserYear] = useState<string | undefined>(undefined);
-  const [showYearWarning, setShowYearWarning] = useState(false);
   const [showSavedModal, setShowSavedModal] = useState(false);
   const [savedReels, setSavedReels] = useState<ClinicalReel[]>([]);
   const [reelViews, setReelViews] = useState<Record<string, number>>({});
@@ -560,35 +560,6 @@ export const MedmacsDiscoverTab: React.FC<{ active?: boolean }> = ({ active }) =
     })();
   }, [user?.id, user?.user_metadata?.avatar_url]);
 
-  // Load the user's MBBS year to gate early-year (1-3) users behind a warning.
-  useEffect(() => {
-    if (!user?.id) {
-      setUserYear(undefined);
-      return;
-    }
-    (async () => {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('year')
-          .eq('id', user.id)
-          .maybeSingle();
-        setUserYear((profile?.year as string) || undefined);
-      } catch (e) {
-        console.warn('[Discover] Could not load user year:', e);
-        setUserYear(undefined);
-      }
-    })();
-  }, [user?.id]);
-
-  const isEarlyYear = !!userYear && ['1st', '2nd', '3rd'].includes(String(userYear).trim().toLowerCase());
-
-  useEffect(() => {
-    if (active && isEarlyYear) {
-      setShowYearWarning(true);
-    }
-  }, [active, isEarlyYear]);
-
   // Personalized Reel Loading
   const loadReels = async () => {
     setIsLoading(true);
@@ -836,6 +807,7 @@ export const MedmacsDiscoverTab: React.FC<{ active?: boolean }> = ({ active }) =
 
   const handleQuizAnswer = async (option: 'A' | 'B') => {
     if (!currentReel) return;
+    if (selectedQuizOption[currentReel.assigned_id]) return;
 
     setSelectedQuizOption((prev) => ({
       ...prev,
@@ -1049,11 +1021,11 @@ const DiscoverReelSkeleton: React.FC = () => (
 
     {/* 4. LEFT BOTTOM CAPTION & QUIZ SKELETON (Aligned to bottom-16 above floating tab bar) */}
     <div className="absolute left-4 bottom-16 right-20 z-30 flex flex-col gap-2 max-w-[82%]">
-      {/* Title & Subtitle Card Pill Skeleton */}
-      <div className="p-3 rounded-2xl bg-black/30 dark:bg-black/50 border border-white/10 backdrop-blur-md flex flex-col gap-2 animate-pulse">
-        <div className="w-3/4 h-5 rounded-lg bg-white/30 dark:bg-slate-700 animate-pulse" />
-        <div className="w-full h-3 rounded bg-white/20 dark:bg-slate-800 animate-pulse" />
-        <div className="w-4/5 h-3 rounded bg-white/20 dark:bg-slate-800 animate-pulse" />
+      {/* Title & Subtitle Direct Text Skeleton (No background box) */}
+      <div className="flex flex-col gap-1.5 py-1">
+        <div className="w-48 h-5 rounded-md bg-white/40 dark:bg-slate-700/80 animate-pulse shadow-sm" />
+        <div className="w-64 h-3.5 rounded bg-white/30 dark:bg-slate-800/80 animate-pulse shadow-sm" />
+        <div className="w-40 h-3 rounded bg-white/20 dark:bg-slate-800/60 animate-pulse shadow-sm" />
       </div>
 
       {/* Quiz Card Skeleton */}
@@ -1369,11 +1341,23 @@ const DiscoverReelSkeleton: React.FC = () => (
           </div>
         ) : (
           <>
-            <div className="p-2.5 rounded-2xl bg-black/40 dark:bg-black/50 border border-white/10 backdrop-blur-md shadow-xl transition-all duration-300">
-              <h2 className="text-lg font-extrabold text-white tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">
+            <div className="p-0 transition-all duration-300">
+              <h2
+                className="text-lg font-extrabold text-white tracking-tight"
+                style={{
+                  textShadow:
+                    '0 1px 2px rgba(0,0,0,0.9), 0 2px 6px rgba(0,0,0,0.8), 0 0 1px rgba(0,0,0,0.95), 0 4px 14px rgba(0,0,0,0.7)',
+                }}
+              >
                 {currentReel.medical_topic}
               </h2>
-              <p className="text-xs text-slate-100 dark:text-slate-200 mt-0.5 line-clamp-2 leading-relaxed drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] font-medium">
+              <p
+                className="text-xs text-white/95 mt-0.5 line-clamp-2 leading-relaxed font-medium"
+                style={{
+                  textShadow:
+                    '0 1px 2px rgba(0,0,0,0.9), 0 2px 5px rgba(0,0,0,0.85), 0 0 1px rgba(0,0,0,0.95)',
+                }}
+              >
                 {currentReel.identification_text || currentReel.diagnosis_text}
               </p>
             </div>
@@ -1384,27 +1368,72 @@ const DiscoverReelSkeleton: React.FC = () => (
                   <HelpCircle className="w-3.5 h-3.5 text-primary" />
                   <span>{currentReel.interactive_quiz.question}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {shuffledQuizOptions.map((option, i) => {
-                    const letter = i === 0 ? 'A' : 'B';
-                    const selected = currentAnswer === option.key;
-                    return (
-                      <button
-                        key={option.key}
-                        onClick={() => handleQuizAnswer(option.key)}
-                        className={`px-2.5 py-1.5 rounded-lg text-left font-medium transition border text-[11px] ${
-                          selected
-                            ? isCorrect
-                              ? 'bg-emerald-500/30 border-emerald-400 text-emerald-900 dark:text-emerald-200'
-                              : 'bg-rose-500/30 border-rose-400 text-rose-900 dark:text-rose-200'
-                            : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200'
-                        }`}
-                      >
-                        {letter}: {option.text}
-                      </button>
-                    );
-                  })}
-                </div>
+                <AnimatePresence initial={false}>
+                  {isAnswered && (
+                    <motion.div
+                      key="quiz-result"
+                      role="status"
+                      aria-live="polite"
+                      initial={prefersReducedMotion ? false : { opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: 'easeOut' }}
+                      className={`mb-2 flex items-center gap-1.5 rounded-lg px-2.5 py-2 font-bold ${
+                        isCorrect
+                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200'
+                          : 'bg-rose-100 text-rose-800 dark:bg-rose-500/15 dark:text-rose-200'
+                      }`}
+                    >
+                      {isCorrect ? (
+                        <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <XCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      )}
+                      <span>
+                        {isCorrect ? 'Correct — well done' : 'Not quite — correct answer shown'}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <motion.div layout={!prefersReducedMotion} className="grid grid-cols-2 gap-1.5">
+                  <AnimatePresence initial={false} mode="popLayout">
+                    {shuffledQuizOptions
+                      .filter(
+                        (option) =>
+                          !isAnswered || option.key === currentReel.interactive_quiz?.correct_option,
+                      )
+                      .map((option) => {
+                        const isRevealedCorrectAnswer =
+                          isAnswered && option.key === currentReel.interactive_quiz?.correct_option;
+                        return (
+                          <motion.button
+                            layout={!prefersReducedMotion}
+                            key={option.key}
+                            onClick={() => handleQuizAnswer(option.key)}
+                            disabled={isAnswered}
+                            initial={false}
+                            exit={prefersReducedMotion ? undefined : { opacity: 0, scale: 0.94 }}
+                            transition={{ duration: prefersReducedMotion ? 0 : 0.2, ease: 'easeOut' }}
+                            aria-label={`${option.key}: ${option.text}${
+                              isRevealedCorrectAnswer ? ', correct answer' : ''
+                            }`}
+                            className={`min-h-11 rounded-lg border px-2.5 py-2 text-left text-[11px] font-medium transition-colors duration-200 ${
+                              isRevealedCorrectAnswer
+                                ? 'col-span-2 cursor-default bg-emerald-100 border-emerald-400 text-emerald-900 dark:bg-emerald-500/20 dark:border-emerald-400/70 dark:text-emerald-100'
+                                : 'cursor-pointer bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 dark:active:bg-slate-600 text-slate-800 dark:text-slate-200'
+                            }`}
+                          >
+                            <span className="flex items-center justify-between gap-2">
+                              <span>{option.key}: {option.text}</span>
+                              {isRevealedCorrectAnswer && (
+                                <CheckCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                              )}
+                            </span>
+                          </motion.button>
+                        );
+                      })}
+                  </AnimatePresence>
+                </motion.div>
 
                 {/* 4. EXPLANATION MODAL TRIGGER */}
                 {isAnswered && (
@@ -2090,46 +2119,6 @@ const DiscoverReelSkeleton: React.FC = () => (
         </div>
       )}
 
-    {/* EARLY-YEAR MBBS CONTENT WARNING */}
-      {showYearWarning && (
-        <div
-          onClick={() => setShowYearWarning(false)}
-          className="fixed inset-0 z-[150] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 cursor-pointer"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-amber-500/30 rounded-3xl p-6 flex flex-col items-center text-center text-slate-900 dark:text-white shadow-2xl cursor-default animate-in zoom-in-95 duration-200"
-          >
-            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-500/40 flex items-center justify-center mb-3">
-              <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
-            </div>
-
-            <h3 className="font-bold text-base text-slate-900 dark:text-white mb-1">Content Warning</h3>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mb-5 leading-relaxed">
-              We are still building algorithms and contents may not be appropriate for your year of study.
-              Continue Anyway?
-            </p>
-
-            <div className="grid grid-cols-2 gap-3 w-full">
-              <button
-                onClick={() => {
-                  setShowYearWarning(false);
-                  window.dispatchEvent(new CustomEvent('switch-dashboard-tab', { detail: 'home' }));
-                }}
-                className="py-2.5 rounded-xl bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 font-bold text-xs text-slate-700 dark:text-slate-300 transition"
-              >
-                Go Back
-              </button>
-              <button
-                onClick={() => setShowYearWarning(false)}
-                className="py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 font-bold text-xs text-white shadow-lg shadow-amber-500/30 transition"
-              >
-                Continue Anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

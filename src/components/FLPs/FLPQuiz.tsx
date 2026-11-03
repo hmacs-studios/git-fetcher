@@ -553,8 +553,21 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex flex-col w-full"
+                    transition={{ duration: 0.25 }}
+                    drag="x"
+                    dragDirectionLock
+                    dragConstraints={{ left: 0, right: 0 }}
+                    dragElastic={0.18}
+                    onDragEnd={(_, info) => {
+                      const swipeThreshold = 45;
+                      const swipeVelocity = 300;
+                      if (info.offset.x < -swipeThreshold || info.velocity.x < -swipeVelocity) {
+                        goToNextQuestion();
+                      } else if (info.offset.x > swipeThreshold || info.velocity.x > swipeVelocity) {
+                        goToPreviousQuestion();
+                      }
+                    }}
+                    className="flex flex-col w-full touch-pan-y"
                   >
                     <h2 className="text-xl sm:text-2xl font-black text-foreground leading-[1.3] tracking-tight mb-8">
                       {currentMCQ.question}

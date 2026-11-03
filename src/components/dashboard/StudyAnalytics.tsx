@@ -95,98 +95,21 @@ export const StudyAnalytics = () => {
     queryFn: async () => {
       if (!user?.id) return null;
 
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-      const [
-        recentAnswersResult,
-        allAnswersResult,
-        aiTestsResult,
-        battlesResult,
-        savedResult,
-      ] = await Promise.all([
-        supabase
-          .from('user_answers')
-          .select('is_correct')
-          .eq('user_id', user.id)
-          .gte('created_at', sevenDaysAgo.toISOString()),
-        supabase
-          .from('user_answers')
-          .select('is_correct, time_taken, created_at')
-          .eq('user_id', user.id),
-        supabase
-          .from('ai_generated_tests')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id),
-        supabase
-          .from('battle_results')
-          .select('rank')
-          .eq('user_id', user.id),
-        supabase
-          .from('saved_mcqs')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id),
-      ]);
-
-      const recentAnswers = recentAnswersResult.data || [];
-      const allAnswers = allAnswersResult.data || [];
-      const battles = battlesResult.data || [];
-      const aiTestsCount = aiTestsResult.count || 0;
-      const savedCount = savedResult.count || 0;
-
-      const totalQuestions = allAnswers.length;
-      const correctAnswers = allAnswers.filter(a => a.is_correct).length;
-      const weeklyQuestions = recentAnswers.length;
-      const weeklyCorrect = recentAnswers.filter(a => a.is_correct).length;
-
-      const overallAccuracy = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
-      const weeklyAccuracy = weeklyQuestions > 0 ? Math.round((weeklyCorrect / weeklyQuestions) * 100) : 0;
-
-      const answersWithTime = allAnswers.filter(a => a.time_taken && a.time_taken > 0);
-      const avgTime = answersWithTime.length > 0
-        ? Math.round(answersWithTime.reduce((sum, a) => sum + (a.time_taken || 0), 0) / answersWithTime.length)
-        : 0;
-
-      const studyDates = allAnswers.map(a => {
-        const date = new Date(a.created_at);
-        return date.toLocaleDateString("en-US", { timeZone: "Asia/Karachi" });
-      });
-      const uniqueStudyDates = [...new Set(studyDates)];
-
-      let currentStreak = 0;
-      const today = new Date();
-      const todayPKT = new Date(today.toLocaleString("en-US", { timeZone: "Asia/Karachi" }));
-      const todayStr = todayPKT.toLocaleDateString("en-US", { timeZone: "Asia/Karachi" });
-
-      if (uniqueStudyDates.length > 0) {
-        const isTodayActive = uniqueStudyDates.includes(todayStr);
-        const checkDate = new Date(todayPKT);
-        if (!isTodayActive) {
-          checkDate.setDate(checkDate.getDate() - 1);
-        }
-        while (true) {
-          const checkStr = checkDate.toLocaleDateString("en-US", { timeZone: "Asia/Karachi" });
-          if (uniqueStudyDates.includes(checkStr)) {
-            currentStreak++;
-            checkDate.setDate(checkDate.getDate() - 1);
-          } else {
-            break;
-          }
-          if (currentStreak > 365) break;
-        }
-      }
+      const { data, error } = await (supabase as any).rpc('medmacs_learning_analytics', { p_period_days: 7 });
+      if (error) throw error;
+      const exact = data || {};
 
       return {
-        totalQuestions,
-        correctAnswers,
-        overallAccuracy,
-        weeklyQuestions,
-        weeklyAccuracy,
-        avgTime,
-        testsGenerated: aiTestsCount,
-        battlesPlayed: battles.length,
-        battlesWon: battles.filter(b => b.rank === 1).length,
-        savedCount
+        totalQuestions: Number(exact.attempts || 0),
+        correctAnswers: Number(exact.correct || 0),
+        overallAccuracy: Number(exact.accuracy_percent || 0),
+        weeklyQuestions: Number(exact.period_attempts || 0),
+        weeklyAccuracy: Number(exact.period_accuracy_percent || 0),
+        avgTime: Number(exact.average_time_seconds || 0),
+        testsGenerated: Number(exact.tests_generated || 0),
+        battlesPlayed: Number(exact.battles_played || 0),
+        battlesWon: Number(exact.battles_won || 0),
+        savedCount: Number(exact.saved_count || 0)
       };
     },
     enabled: !!user?.id,

@@ -1,0 +1,20 @@
+{
+    "name": "Medmaccs",
+    "short_name": "Meedmacs",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#4f46e5",
+    "icons": [
+        {
+            "src": "/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

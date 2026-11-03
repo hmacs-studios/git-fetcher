@@ -17,7 +17,7 @@ import { aiApiJson } from '@/utils/aiApi';
 import { isAiPolicyNotice } from '@/utils/aiPolicyNotice';
 import { fetchChapterById, fetchSubjectById, Chapter, Subject } from '@/utils/mcqData';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { playCorrectSound, playIncorrectSound } from '@/utils/soundEffects';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from 'next-themes';
@@ -33,10 +33,12 @@ import { triggerHaptic } from '@/utils/haptics';
 
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { MCQTimer } from '@/features/mcq/components/MCQTimer';
 import { MCQAnswerOption } from '@/features/mcq/components/MCQAnswerOption';
+import { renderAiMessageText } from '@/utils/format';
 import {
   clearPreparedMCQQuiz,
   ChapterLockedError,
@@ -45,6 +47,9 @@ import {
 } from '@/features/mcq/quizBootstrap';
 import { MCQQuestionMapDrawer } from '@/features/mcq/components/MCQQuestionMapDrawer';
 import MCQLoadingSkeleton from '@/features/mcq/components/MCQLoadingSkeleton';
+import { matchGlossaryTerms, type GlossaryTerm } from '@/services/glossaryService';
+import { HighlightedText } from '@/components/mcq/HighlightedText';
+import { GlossaryTermModal } from '@/components/mcq/GlossaryTermModal';
 import {
   getPakistanDateKey,
   cacheMCQPlan,
@@ -76,6 +81,9 @@ const LAST_ATTEMPTED_MCQ_KEY = 'lastAttemptedMCQIndex';
 const LAST_ATTEMPTED_SUBJECT_KEY = 'lastAttemptedMCQSubject';
 const LAST_ATTEMPTED_CHAPTER_KEY = 'lastAttemptedMCQChapter';
 const SAVED_SESSIONS_LIST_KEY = 'mcq_saved_sessions';
+const HEARD_ABOUT_DISMISSAL_KEY = 'medmacs_heard_about_dismissals';
+const MCQ_AI_GUIDE_COMPLETED_KEY = 'medmacs_mcq_ai_guide_completed';
+type HeardAboutUsOption = { value: string; label: string; icon: string | null };
 export interface SavedMCQSession {
   subjectId: string;
   chapterId: string;
@@ -83,8 +91,46 @@ export interface SavedMCQSession {
   timestamp: string;
 }
 
+const MAX_SAVED_SESSIONS = 30;
+
 let savedSessionSyncTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSavedSessionSync: { userId: string; sessions: SavedMCQSession[] } | null = null;
+
+const isSavedSession = (value: unknown): value is SavedMCQSession => {
+  if (!value || typeof value !== 'object') return false;
+  const session = value as Partial<SavedMCQSession>;
+  return typeof session.subjectId === 'string'
+    && typeof session.chapterId === 'string'
+    && typeof session.timestamp === 'string';
+};
+
+const mergeSavedSessions = (...lists: unknown[][]): SavedMCQSession[] => {
+  const byChapter = new Map<string, SavedMCQSession>();
+
+  lists.flat()
+    .filter(isSavedSession)
+    .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+    .forEach((session) => {
+      if (!byChapter.has(session.chapterId)) byChapter.set(session.chapterId, session);
+    });
+
+  return Array.from(byChapter.values()).slice(0, MAX_SAVED_SESSIONS);
+};
+
+const mcqSwipeVariants = {
+  enter: (direction: number) => ({
+    x: direction > 0 ? 40 : -40,
+    opacity: 0,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+  },
+  exit: (direction: number) => ({
+    x: direction > 0 ? -40 : 40,
+    opacity: 0,
+  }),
+};
 
 const flushSavedSessions = async () => {
   if (savedSessionSyncTimer) {
@@ -94,9 +140,26 @@ const flushSavedSessions = async () => {
   const pending = pendingSavedSessionSync;
   pendingSavedSessionSync = null;
   if (!pending) return;
+
+  // Do not replace the user's entire cloud list with one device's local cache.
+  // A device that has not seen recent sessions would otherwise erase them.
+  const { data: profile, error: readError } = await supabase
+    .from('profiles')
+    .select('in_progress_mcqs')
+    .eq('id', pending.userId)
+    .maybeSingle();
+  if (readError) {
+    console.warn('Unable to load saved MCQ sessions before syncing:', readError);
+    return;
+  }
+
+  const cloudSessions = Array.isArray(profile?.in_progress_mcqs)
+    ? profile.in_progress_mcqs as unknown[]
+    : [];
+  const sessions = mergeSavedSessions(cloudSessions, pending.sessions);
   const { error } = await supabase
     .from('profiles')
-    .update({ in_progress_mcqs: pending.sessions })
+    .update({ in_progress_mcqs: sessions })
     .eq('id', pending.userId);
   if (error) console.warn('Unable to sync saved MCQ sessions:', error);
 };
@@ -108,7 +171,7 @@ const updateSavedSessionsList = (userId: string | undefined, subjectId: string, 
     let sessions: SavedMCQSession[] = localData ? JSON.parse(localData) : [];
     sessions = sessions.filter(s => s.chapterId !== chapterId);
     sessions.unshift({ subjectId, chapterId, lastIndex, timestamp: new Date().toISOString() });
-    if (sessions.length > 5) sessions = sessions.slice(0, 5);
+    if (sessions.length > MAX_SAVED_SESSIONS) sessions = sessions.slice(0, MAX_SAVED_SESSIONS);
     localStorage.setItem(SAVED_SESSIONS_LIST_KEY, JSON.stringify(sessions));
     if (userId) {
       pendingSavedSessionSync = { userId, sessions };
@@ -128,8 +191,33 @@ const removeSavedSessionFromList = async (userId: string | undefined, chapterId:
     sessions = sessions.filter(s => s.chapterId !== chapterId);
     localStorage.setItem(SAVED_SESSIONS_LIST_KEY, JSON.stringify(sessions));
     if (userId) {
-      pendingSavedSessionSync = { userId, sessions };
-      await flushSavedSessions();
+      // A reset/finish is a deletion, so it cannot use the normal merge path:
+      // that would bring the chapter back from the cloud copy. Merge first,
+      // then remove this chapter from the combined list.
+      if (savedSessionSyncTimer) {
+        clearTimeout(savedSessionSyncTimer);
+        savedSessionSyncTimer = null;
+      }
+      pendingSavedSessionSync = null;
+      const { data: profile, error: readError } = await supabase
+        .from('profiles')
+        .select('in_progress_mcqs')
+        .eq('id', userId)
+        .maybeSingle();
+      if (readError) {
+        console.warn('Unable to load saved MCQ sessions before removing one:', readError);
+        return;
+      }
+      const cloudSessions = Array.isArray(profile?.in_progress_mcqs)
+        ? profile.in_progress_mcqs as unknown[]
+        : [];
+      const mergedSessions = mergeSavedSessions(cloudSessions, sessions)
+        .filter(session => session.chapterId !== chapterId);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ in_progress_mcqs: mergedSessions })
+        .eq('id', userId);
+      if (error) console.warn('Unable to remove saved MCQ session:', error);
     }
   } catch (e) { console.error("Failed to remove saved session from array", e); }
 };
@@ -179,26 +267,23 @@ const MCQSettingsModal = ({
   soundEnabled, toggleSound,
   hapticsEnabled, toggleHaptics,
   aiPopupsDisabled, toggleAiPopups,
+  glossaryEnabled, toggleGlossary,
   onReport, isPremium, theme, setTheme, onReset,
   revealAllAnswers, toggleRevealAllAnswers,
+  onRequireUpgrade,
   downloadSubject, downloadChapter
-}) => {
+}: any) => {
   const { status: offlineStatus } = useOfflineChapterStatus(downloadChapter?.id);
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <SheetContent side="bottom" className="mx-auto flex max-h-[88dvh] flex-col rounded-t-[2rem] border-x border-t border-primary/20 bg-background/95 p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] backdrop-blur-2xl sm:max-w-lg z-[300]" overlayClassName="z-[300]">
         <div className="mx-auto mb-5 h-1.5 w-12 rounded-full bg-muted" aria-hidden="true" />
-        <SheetHeader className="text-left sm:text-left">
-          <SheetTitle className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-blue-600 flex items-center justify-center shadow-lg shrink-0">
-              <Zap className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-xl font-black italic uppercase tracking-tight bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-              Pause
-            </span>
+        <SheetHeader className="items-center text-center sm:text-center">
+          <SheetTitle className="flex w-full justify-center">
+            <span className="brand-wordmark text-[1.75rem] text-foreground">Pause</span>
           </SheetTitle>
-          <SheetDescription className="text-sm">Customize your quiz experience</SheetDescription>
+          <SheetDescription className="sr-only">Customize your quiz experience</SheetDescription>
         </SheetHeader>
 
         <div className="mt-5 min-h-0 flex-1 space-y-3 overflow-y-auto pb-2 pr-0.5">
@@ -246,6 +331,22 @@ const MCQSettingsModal = ({
             </div>
           </div>
 
+          {/* Medical Glossary */}
+          <div className="flex items-center justify-between p-4 rounded-2xl bg-teal-500/10 border border-teal-500/20">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 flex items-center justify-center shadow-lg shrink-0">
+                <BookOpen className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Medical Glossary</p>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">{glossaryEnabled ? 'ON' : 'OFF'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Switch checked={glossaryEnabled} onCheckedChange={toggleGlossary} className="data-[state=checked]:bg-teal-500" />
+            </div>
+          </div>
+
           {/* Sound FX */}
           <div className="flex items-center justify-between p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20">
             <div className="flex items-center gap-3">
@@ -274,23 +375,49 @@ const MCQSettingsModal = ({
             <Switch checked={hapticsEnabled} onCheckedChange={toggleHaptics} className="data-[state=checked]:bg-emerald-500 shrink-0" />
           </div>
 
-          {/* Reveal All Answers (premium) */}
-          {isPremium && (
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center shadow-lg shrink-0">
-                  <Eye className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Reveal All Answers</p>
-                  <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">
-                    {revealAllAnswers ? 'ON — answers shown, no cloud sync' : 'OFF — hide answers'}
-                  </p>
-                </div>
+          {/* Reveal All Answers */}
+          <div
+            onClick={() => {
+              if (!isPremium) {
+                onRequireUpgrade?.();
+              }
+            }}
+            className={`flex items-center justify-between p-4 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 ${
+              !isPremium ? 'cursor-pointer hover:bg-yellow-500/15 transition-colors' : ''
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-600 flex items-center justify-center shadow-lg shrink-0">
+                <Eye className="w-5 h-5 text-white" />
               </div>
-              <Switch checked={revealAllAnswers} onCheckedChange={toggleRevealAllAnswers} className="data-[state=checked]:bg-yellow-500 shrink-0" />
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Reveal All Answers</p>
+                  {!isPremium && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-white shadow-sm">
+                      <Crown className="w-2.5 h-2.5" /> Premium
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-black">
+                  {isPremium
+                    ? (revealAllAnswers ? 'ON — answers shown, no cloud sync' : 'OFF — hide answers')
+                    : 'Upgrade to instantly view all answers'}
+                </p>
+              </div>
             </div>
-          )}
+            {isPremium ? (
+              <Switch
+                checked={revealAllAnswers}
+                onCheckedChange={toggleRevealAllAnswers}
+                className="data-[state=checked]:bg-yellow-500 shrink-0"
+              />
+            ) : (
+              <div className="flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2 py-1 text-amber-600 dark:text-amber-400">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+            )}
+          </div>
 
           {/* Theme Toggle */}
           <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-500/10 border border-zinc-500/20">
@@ -323,32 +450,33 @@ const MCQSettingsModal = ({
   );
 };
 
-const UpgradeAccountModal = ({ isOpen, onClose, onUpgradeClick, message }) => (
-  <DialogPrimitive.Root open={isOpen} onOpenChange={onClose}>
-    <ModalContent className="sm:max-w-[425px]">
-      <div className="bg-white dark:bg-zinc-900 border-2 border-yellow-500/30 rounded-2xl p-6 shadow-2xl">
-        <DialogPrimitive.Title className="sr-only">Upgrade Your Account</DialogPrimitive.Title>
-        <DialogPrimitive.Description className="sr-only">Upgrade to premium for unlimited access</DialogPrimitive.Description>
-        <div className="flex flex-col items-center text-center">
-          <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }} className="mb-4">
-            <Crown className="w-16 h-16 text-yellow-500" />
-          </motion.div>
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent mb-2">
-            Upgrade Your Account
-          </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-6">
-            {message}
-          </p>
-          <div className="flex flex-col-reverse sm:flex-row gap-3 w-full sm:justify-center">
-            <Button onClick={onClose} variant="outline" className="w-full sm:w-auto rounded-xl">Maybe Later</Button>
-            <Button onClick={onUpgradeClick} className="w-full sm:w-auto bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg">
-              Upgrade Now
-            </Button>
-          </div>
+const UpgradeAccountModal = ({ isOpen, onClose, onUpgradeClick, message }: { isOpen: boolean; onClose: () => void; onUpgradeClick: () => void; message: string }) => (
+  <BottomSheet
+    open={isOpen}
+    onClose={onClose}
+    hideHeader
+    className="border-yellow-500/30 shadow-[0_-18px_60px_-24px_rgba(234,179,8,0.35)]"
+  >
+    <div className="flex flex-col items-center text-center px-1 pb-2">
+      <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 0.5, repeat: Infinity, repeatDelay: 2 }} className="mb-4">
+        <div className="w-16 h-16 rounded-3xl bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20 shadow-inner">
+          <Crown className="w-9 h-9 text-yellow-500" />
         </div>
+      </motion.div>
+      <h2 className="text-2xl font-bold bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
+        Upgrade Your Account
+      </h2>
+      <p className="mt-2 text-sm text-muted-foreground leading-relaxed font-medium max-w-sm">
+        {message}
+      </p>
+      <div className="mt-6 flex flex-col-reverse sm:flex-row gap-3 w-full sm:justify-center">
+        <Button onClick={onClose} variant="outline" className="w-full sm:w-auto rounded-xl">Maybe Later</Button>
+        <Button onClick={onUpgradeClick} className="w-full sm:w-auto bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg">
+          Upgrade Now
+        </Button>
       </div>
-    </ModalContent>
-  </DialogPrimitive.Root>
+    </div>
+  </BottomSheet>
 );
 
 const LeaveTestModal = ({ isOpen, onClose, onConfirm }) => (
@@ -470,7 +598,7 @@ const DrAhroidUnconfirmedInfoModal = ({ isOpen, onClose }: { isOpen: boolean; on
           <Bot className="w-7 h-7 opacity-80" />
         </div>
         <SheetHeader className="text-center sm:text-center">
-          <SheetTitle className="text-xl font-extrabold tracking-tight font-syne text-foreground">
+          <SheetTitle className="text-xl font-extrabold tracking-tight font-['Bricolage_Grotesque'] text-foreground">
             Question Verification Info
           </SheetTitle>
           <SheetDescription className="text-sm font-medium text-muted-foreground mt-2 leading-relaxed">
@@ -1056,6 +1184,7 @@ export const MCQDisplay = ({
 }: MCQDisplayProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const [mcqs, setMcqs] = useState<PreparedMCQ[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1064,6 +1193,7 @@ export const MCQDisplay = ({
   const [preparationAttempt, setPreparationAttempt] = useState(0);
   const contentRef = useRef<HTMLDivElement>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [swipeDirection, setSwipeDirection] = useState<1 | -1>(1);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [startTime, setStartTime] = useState(0);
@@ -1081,7 +1211,13 @@ export const MCQDisplay = ({
   const [isReportSubmitting, setIsReportSubmitting] = useState(false);
   const [hasAttemptedAny, setHasAttemptedAny] = useState(false);
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const [showHeardAboutPrompt, setShowHeardAboutPrompt] = useState(false);
+  const [isSavingHeardAbout, setIsSavingHeardAbout] = useState(false);
+  const [heardAboutCompleted, setHeardAboutCompleted] = useState(false);
+  const [showMcqAiGuide, setShowMcqAiGuide] = useState(false);
   const isSubmittingAnswerRef = useRef(false);
+  const normalMcqSubmissionsRef = useRef(0);
+  const mcqAiGuideDismissedRef = useRef(false);
   const hasUserInteractedRef = useRef(false);
   const answerSelectImplementationRef = useRef<(answer: string) => void>(() => undefined);
   const stableAnswerSelectRef = useRef((answer: string) => {
@@ -1126,6 +1262,10 @@ export const MCQDisplay = ({
     if (typeof window !== 'undefined') return localStorage.getItem('aiPopupsDisabled') === 'true';
     return false;
   });
+  const [glossaryEnabled, setGlossaryEnabled] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('mcqGlossaryDisabled') !== 'true';
+    return true;
+  });
   const [soundEnabled, setSoundEnabled] = useState(() => {
     if (typeof window !== 'undefined') return localStorage.getItem('mcqSoundDisabled') === 'false';
     return false;
@@ -1169,17 +1309,112 @@ export const MCQDisplay = ({
     queryKey: ['profileForChatbot', user?.id],
     queryFn: async () => {
       if (!user?.id) return null;
-      const { data, error } = await supabase.from('profiles').select('plan, daily_mcq_submissions, last_submission_reset_date, full_name').eq('id', user.id).maybeSingle();
+      const { data, error } = await supabase.from('profiles').select('plan, daily_mcq_submissions, last_submission_reset_date, full_name, heard_about_us, program_code').eq('id', user.id).maybeSingle();
       if (error) { console.error('Error fetching profile for chatbot:', error); return null; }
       return data;
     },
     enabled: !!user?.id
   });
 
+  const activeProgramCode = useMemo(() => {
+    const subjectProg = (downloadSubject?.program_code || initialSubject?.program_code)?.trim().toLowerCase();
+    if (subjectProg === 'pharm_d' || subjectProg === 'mbbs') return subjectProg;
+    const profileProg = String((profile as any)?.program_code || '').trim().toLowerCase();
+    return profileProg === 'pharm_d' ? 'pharm_d' : 'mbbs';
+  }, [downloadSubject?.program_code, initialSubject?.program_code, (profile as any)?.program_code]);
+
+  const { data: heardAboutOptions = [], isLoading: isLoadingHeardAboutOptions } = useQuery({
+    queryKey: ['heard-about-us-options'],
+    queryFn: async (): Promise<HeardAboutUsOption[]> => {
+      const { data, error } = await supabase
+        .from('heard_about_us_options' as any)
+        .select('value, label, icon')
+        .eq('enabled', true)
+        .order('order_index', { ascending: true });
+      if (error) throw error;
+      return (data || []).map((option: any) => ({
+        value: String(option.value),
+        label: String(option.label),
+        icon: option.icon ? String(option.icon) : null,
+      }));
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
   const userPlanForChatbot = profile?.plan?.toLowerCase() || cachedUserPlan || 'free';
   const isPremium = true;
   const canUseAiSummary = true;
   const canRevealAllAnswers = userPlanForChatbot === 'premium';
+
+  const canShowHeardAboutPrompt = () => {
+    if (!user?.id || timerEnabled || mistakeMode || heardAboutCompleted || profile?.heard_about_us) return false;
+    try {
+      const saved = localStorage.getItem(`${HEARD_ABOUT_DISMISSAL_KEY}:${user.id}`);
+      if (!saved) return true;
+      const dismissal = JSON.parse(saved) as { permanent?: boolean; retryAfter?: number };
+      return !dismissal.permanent && (!dismissal.retryAfter || dismissal.retryAfter <= Date.now());
+    } catch {
+      return true;
+    }
+  };
+
+  const considerHeardAboutPrompt = () => {
+    normalMcqSubmissionsRef.current += 1;
+    if (normalMcqSubmissionsRef.current >= 5 && canShowHeardAboutPrompt()) {
+      setShowHeardAboutPrompt(true);
+    }
+  };
+
+  const dismissHeardAboutPrompt = () => {
+    if (user?.id) {
+      try {
+        const key = `${HEARD_ABOUT_DISMISSAL_KEY}:${user.id}`;
+        const previous = JSON.parse(localStorage.getItem(key) || '{}') as { dismissals?: number };
+        const dismissals = (previous.dismissals || 0) + 1;
+        localStorage.setItem(key, JSON.stringify(
+          dismissals >= 2
+            ? { dismissals, permanent: true }
+            : { dismissals, retryAfter: Date.now() + 24 * 60 * 60 * 1000 },
+        ));
+      } catch { /* a future MCQ can ask again if storage is unavailable */ }
+    }
+    setShowHeardAboutPrompt(false);
+  };
+
+  const shouldShowMcqAiGuide = () => {
+    if (!user?.id || timerEnabled || mistakeMode || mcqAiGuideDismissedRef.current) return false;
+    try {
+      return localStorage.getItem(`${MCQ_AI_GUIDE_COMPLETED_KEY}:${user.id}`) !== 'true';
+    } catch {
+      return true;
+    }
+  };
+
+  const dismissMcqAiGuide = () => {
+    mcqAiGuideDismissedRef.current = true;
+    setShowMcqAiGuide(false);
+  };
+
+  const completeMcqAiGuide = () => {
+    if (user?.id) {
+      try { localStorage.setItem(`${MCQ_AI_GUIDE_COMPLETED_KEY}:${user.id}`, 'true'); } catch { /* continue without persistence */ }
+    }
+    setShowMcqAiGuide(false);
+  };
+
+  const saveHeardAbout = async (value: string) => {
+    if (!user?.id || isSavingHeardAbout) return;
+    setIsSavingHeardAbout(true);
+    const { error } = await supabase.from('profiles').update({ heard_about_us: value }).eq('id', user.id);
+    setIsSavingHeardAbout(false);
+    if (error) {
+      toast({ title: 'Could not save your answer', description: 'Please try again.', variant: 'destructive' });
+      return;
+    }
+    setHeardAboutCompleted(true);
+    setShowHeardAboutPrompt(false);
+    void queryClient.invalidateQueries({ queryKey: ['profileForChatbot', user.id] });
+  };
 
   useEffect(() => {
     if (!canRevealAllAnswers && revealAllAnswers) {
@@ -1194,6 +1429,36 @@ export const MCQDisplay = ({
   const totalQuestions = mcqs.length;
   const progressPercentage = totalQuestions > 0 ? ((currentQuestionIndex + 1) / totalQuestions) * 100 : 0;
   const effectiveQuickSubmit = quickSubmit;
+
+  // Medical Glossary States
+  const [glossaryTerms, setGlossaryTerms] = useState<GlossaryTerm[]>([]);
+  const [selectedGlossaryTerm, setSelectedGlossaryTerm] = useState<GlossaryTerm | null>(null);
+  const [isGlossaryModalOpen, setIsGlossaryModalOpen] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (!glossaryEnabled || !currentMCQ?.question) {
+      setGlossaryTerms([]);
+      return;
+    }
+
+    // Only match against question stem (not options or explanations)
+    matchGlossaryTerms(currentMCQ.question).then((matches) => {
+      if (!isCancelled) {
+        setGlossaryTerms(matches);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentMCQ?.id, currentMCQ?.question, glossaryEnabled]);
+
+  const handleGlossaryTermClick = (term: GlossaryTerm) => {
+    setSelectedGlossaryTerm(term);
+    setIsGlossaryModalOpen(true);
+    triggerHaptic(10);
+  };
   const mistakeMcqIdsKey = mistakeMcqIds.join('|');
 
   const normalizeCitations = (citations: any) =>
@@ -1260,7 +1525,7 @@ export const MCQDisplay = ({
   const handleAnswerSelect = (answer: string) => {
     if (showExplanation) return;
     if (revealAllAnswers) return;
-    if (hapticsEnabled) triggerHaptic(10);
+    if (hapticsEnabled) void triggerHaptic(6);
     hasUserInteractedRef.current = true;
     setSelectedAnswer(answer);
     if (effectiveQuickSubmit) setTimeout(() => handleSubmitAnswer(false, answer), 150);
@@ -1315,8 +1580,10 @@ export const MCQDisplay = ({
         else playIncorrectSound();
       }
       if (hapticsEnabled) {
-        if (isCorrect && !timeUp) void triggerHaptic([15, 30, 15]);
-        else void triggerHaptic([50, 70, 50]);
+        // Keep answer feedback intentionally soft: success is a light double tap,
+        // while an incorrect answer is one slightly longer tap.
+        if (isCorrect && !timeUp) void triggerHaptic([8, 20, 8]);
+        else void triggerHaptic(18);
       }
       if (isCorrect && !timeUp) setScore(prev => prev + 1);
       setAnsweredQuestions(prev => ({ ...prev, [currentMCQ.id]: { selectedAnswer: answer || 'No answer (time up)' } }));
@@ -1388,6 +1655,11 @@ export const MCQDisplay = ({
               p_count: reservedSubmissionCount,
             });
           }
+          // The dashboard may already be mounted in the app shell. Mark its
+          // totals stale as soon as an answer reaches the server so activation
+          // mode ends without requiring an app restart.
+          await queryClient.invalidateQueries({ queryKey: ['user-stats', user.id] });
+          considerHeardAboutPrompt();
           const achievementModule = await import('@/components/profile/AchievementBadges');
           achievementModule.notifyAchievementProgress('mcq_answer');
         } catch (error) {
@@ -1444,12 +1716,15 @@ export const MCQDisplay = ({
   };
 
   const handleNextQuestion = () => {
+    setSwipeDirection(1);
     hasUserInteractedRef.current = true;
     if (currentQuestionIndex < totalQuestions - 1) {
+      const shouldGuideBeforeSecondQuestion = currentQuestionIndex === 0 && shouldShowMcqAiGuide();
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedAnswer(null);
       setShowExplanation(false);
       setStartTime(Date.now());
+      if (shouldGuideBeforeSecondQuestion) setShowMcqAiGuide(true);
     } else {
       toast({ title: "🎉 Quiz Completed!", description: `You scored ${score}/${totalQuestions}`, className: "bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0" });
       if (typeof window !== 'undefined') {
@@ -1459,6 +1734,23 @@ export const MCQDisplay = ({
         removeSavedSessionFromList(user?.id, chapter);
       }
       onBack();
+    }
+  };
+
+  const handleSwipeNext = () => {
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setSwipeDirection(1);
+      goToQuestion(currentQuestionIndex + 1);
+    } else if (showExplanation || (currentMCQ?.id && answeredQuestions[currentMCQ.id])) {
+      setSwipeDirection(1);
+      handleNextQuestion();
+    }
+  };
+
+  const handleSwipePrev = () => {
+    if (currentQuestionIndex > 0) {
+      setSwipeDirection(-1);
+      goToQuestion(currentQuestionIndex - 1);
     }
   };
 
@@ -1499,10 +1791,23 @@ export const MCQDisplay = ({
     } finally { setIsReportSubmitting(false); }
   };
 
-  const handleUpgradeClick = () => setShowUpgradeModal(false);
+  const handleUpgradeClick = () => {
+    setShowUpgradeModal(false);
+    window.location.href = '/pricing';
+  };
 
   const goToQuestion = (index: number) => {
+    hasUserInteractedRef.current = true;
+    if (index > currentQuestionIndex) {
+      setSwipeDirection(1);
+    } else if (index < currentQuestionIndex) {
+      setSwipeDirection(-1);
+    }
+    const targetMcq = mcqs[index];
+    const saved = targetMcq ? answeredQuestions[targetMcq.id] : undefined;
     setCurrentQuestionIndex(index);
+    setSelectedAnswer(saved?.selectedAnswer ?? null);
+    setShowExplanation(Boolean(saved));
     setStartTime(Date.now());
     setIsDrawerOpen(false);
     if (contentRef.current) {
@@ -1533,14 +1838,24 @@ export const MCQDisplay = ({
       setIsReferenceModalOpen(true);
       return;
     }
+
+    // If references were already confirmed and available via NLI verification, reuse them directly!
+    const hasAlreadyVerifiedCitations = Array.isArray(referenceVerification?.citations) && referenceVerification.citations.length > 0;
+    const hasCachedRefResults = Array.isArray(referenceResults) && referenceResults.length > 0;
+
     setSelectedReferenceIndex(null);
-    setConfirmedReferenceIndexes(null);
     setReferenceSummary(null);
     setOptionExplanations({});
     setReferenceActionError('');
     setOfflineReferenceMessage('');
     setIsReferenceModalOpen(true);
-    search(currentMCQ.question, 5);
+
+    if (hasAlreadyVerifiedCitations || hasCachedRefResults) {
+      // Don't re-trigger network load if already verified!
+      return;
+    }
+
+    search(currentMCQ.question, 5, activeProgramCode);
   };
 
   const autoReportQuestion = async (reason: string) => {
@@ -1603,6 +1918,7 @@ export const MCQDisplay = ({
         correctAnswer: actualCorrectAnswerText,
         options: currentMCQ.shuffledOptions || currentMCQ.options || [],
         explanation: currentMCQ.explanation || '',
+        program: activeProgramCode,
       }, { silentLimitError: true });
       const explicitNoInternalReferences =
         parsed?.verdict === 'no_references' ||
@@ -1674,6 +1990,7 @@ export const MCQDisplay = ({
       const data = await aiApiJson<any>('reference-summary', {
         question: currentMCQ.question,
         top_k: 5,
+        program: activeProgramCode,
       }, {});
 
       if (data.status === 'no_references' || !data.summary) {
@@ -1732,6 +2049,7 @@ export const MCQDisplay = ({
         options: currentMCQ.shuffledOptions || currentMCQ.options || [],
         correctAnswer: currentMCQ.correct_answer,
         explanation: currentMCQ.explanation || '',
+        program: activeProgramCode,
       }, {});
       const optionList = currentMCQ.shuffledOptions || currentMCQ.options || [];
       const nextExplanations = Array.isArray(data.optionExplanations)
@@ -2122,33 +2440,7 @@ export const MCQDisplay = ({
     };
   }, [user?.id, mcqs]);
 
-  const QuestionMapGrid = () => (
-    <>
-      <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
-        {mcqs.map((mcq, index) => (
-          <button key={mcq.id}
-            className={`relative h-10 w-full rounded-xl text-sm font-bold transition-[background-color,border-color,color,box-shadow] duration-150 ${
-              currentQuestionIndex === index
-                ? 'bg-gradient-to-br from-primary to-blue-600 text-white border-transparent shadow-lg shadow-primary/30'
-                : isQuestionAnswered(mcq.id)
-                  ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
-                  : 'bg-muted text-muted-foreground border border-transparent'
-            }`}
-            onClick={() => goToQuestion(index)}>
-            {queuedAnswerIds.has(mcq.id) && (
-              <Clock className="absolute right-1 top-1 h-2.5 w-2.5 text-amber-500" />
-            )}
-            {index + 1}
-          </button>
-        ))}
-      </div>
-      <div className="mt-4 text-xs text-muted-foreground space-y-1.5">
-        <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-gradient-to-br from-primary to-blue-600 mr-2" />Current</p>
-        <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2" />Answered</p>
-        <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-muted mr-2" />Unanswered</p>
-      </div>
-    </>
-  );
+
 
   if (loading) {
     return <MCQLoadingSkeleton />;
@@ -2254,14 +2546,11 @@ export const MCQDisplay = ({
             <Menu className="h-5 w-5" />
           </Button>
           <div className="w-8 h-8 rounded-lg overflow-hidden">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs.App" className="w-full h-full object-contain" />
+            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="w-full h-full object-contain" />
           </div>
           <div className="min-w-0 leading-none">
-            <p className="whitespace-nowrap font-['Syne'] text-[13px] font-extrabold tracking-[-0.035em]">
-              <span className="text-primary">Medmacs</span><span className="text-foreground">.app</span>
-            </p>
-            <p className="mt-1 whitespace-nowrap text-[8px] font-bold leading-none tracking-[0.02em] text-muted-foreground">
-              By HMACS Studios
+            <p className="whitespace-nowrap font-['Bricolage_Grotesque'] text-[13px] font-extrabold tracking-[-0.035em]">
+              <span className="brand-wordmark text-lg text-foreground">Medmacs</span>
             </p>
           </div>
           {timerEnabled && (
@@ -2316,8 +2605,73 @@ export const MCQDisplay = ({
       </div>
 
       {/* Main Content */}
-      <div ref={contentRef} className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto overscroll-contain">
-        <div key={currentMCQ?.id} className="flex flex-1 flex-col">
+      <div ref={contentRef} className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain">
+        {showMcqAiGuide ? (
+          <div className="relative flex min-h-[calc(100dvh-10rem)] flex-1 flex-col overflow-hidden px-3 py-4 sm:px-6">
+            <div className="pointer-events-none absolute inset-3 space-y-3.5 opacity-90 sm:inset-x-6">
+              <div className="h-12 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+              <div className="h-28 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+              <div className="space-y-2.5 px-0.5">
+                <div className="h-14 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+                <div className="h-14 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+                <div className="h-14 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+                <div className="h-14 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+              </div>
+              <div className="h-28 rounded-2xl border border-border/60 bg-muted/85 shadow-sm" />
+            </div>
+            <div className="pointer-events-none relative z-10 min-h-[calc(100dvh-10rem)] flex-1">
+              <div className="absolute left-3 top-[20%] z-20 max-w-[58%] origin-top-left -rotate-[7deg] drop-shadow-[0_2px_12px_hsl(var(--background)/0.9)] sm:left-6">
+                <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-primary">Dr Ahroid says</p>
+                <p className="font-['Bricolage_Grotesque'] text-[clamp(1.7rem,8vw,2.5rem)] font-extrabold leading-[0.95] tracking-[-0.065em] text-foreground">
+                  Need a hand? I am <span className="text-primary">right here.</span>
+                </p>
+                <p className="mt-3 text-xs font-semibold leading-5 text-muted-foreground">
+                  Tap me whenever you need a clearer explanation.
+                </p>
+              </div>
+              <div className="absolute bottom-0 right-[-1.5rem] h-[78%] w-[64%] bg-gradient-to-t from-primary/10 to-transparent blur-3xl" />
+              <img
+                src="/mascots/dr-ahroid-confident.png"
+                alt="Dr Ahroid"
+                className="absolute bottom-6 right-[-3rem] z-10 h-[84%] w-auto max-w-none object-contain object-bottom drop-shadow-2xl sm:right-[-2rem]"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={dismissMcqAiGuide}
+              className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+5.8rem)] left-4 z-20 h-10 rounded-xl border border-emerald-400/45 bg-emerald-500 px-4 text-xs font-extrabold text-white shadow-lg shadow-emerald-500/30 transition hover:bg-emerald-600 active:scale-95"
+            >
+              Not now
+            </button>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait" initial={false} custom={swipeDirection}>
+            <motion.div
+              key={currentMCQ?.id || currentQuestionIndex}
+              custom={swipeDirection}
+              variants={mcqSwipeVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{
+                x: { type: "spring", stiffness: 380, damping: 32 },
+                opacity: { duration: 0.16 },
+              }}
+              drag="x"
+              dragDirectionLock
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.18}
+              onDragEnd={(_, info) => {
+                const swipeThreshold = 45;
+                const swipeVelocity = 300;
+                if (info.offset.x < -swipeThreshold || info.velocity.x < -swipeVelocity) {
+                  handleSwipeNext();
+                } else if (info.offset.x > swipeThreshold || info.velocity.x > swipeVelocity) {
+                  handleSwipePrev();
+                }
+              }}
+              className="flex flex-1 flex-col touch-pan-y"
+            >
             {/* Dr Ahroid Verification State Bar */}
             <DrAhroidVerificationBar
               isVerifying={isConfirmingReferences}
@@ -2334,7 +2688,17 @@ export const MCQDisplay = ({
             {/* Question Section */}
             <section className="mx-3 mt-3 rounded-2xl border border-border/50 bg-card/80 px-4 py-5 shadow-sm backdrop-blur-sm sm:mx-6 sm:px-6 sm:py-6">
               <p className="mb-2.5 text-[11px] font-black uppercase tracking-[0.16em] text-primary">{mistakeMode ? 'Mistake correction' : 'Question'} {currentQuestionIndex + 1}</p>
-              <h1 className="text-[1.08rem] font-bold leading-[1.65] tracking-[-0.01em] text-foreground sm:text-xl sm:leading-[1.6]">{currentMCQ?.question}</h1>
+              <h1 className="text-[1.08rem] font-bold leading-[1.65] tracking-[-0.01em] text-foreground sm:text-xl sm:leading-[1.6]">
+                {glossaryEnabled ? (
+                  <HighlightedText
+                    text={currentMCQ?.question || ''}
+                    terms={glossaryTerms}
+                    onTermClick={handleGlossaryTermClick}
+                  />
+                ) : (
+                  currentMCQ?.question || ''
+                )}
+              </h1>
             </section>
 
             {/* Options */}
@@ -2387,7 +2751,7 @@ const isSelected = selectedAnswer === option;
                 transition={{ duration: 0.14, ease: 'easeOut' }}
                 className="mx-3 mb-4 rounded-2xl border border-primary/15 bg-primary/[0.055] px-4 py-4 text-center sm:mx-6"
               >
-                <p className="font-['Syne'] text-sm font-extrabold tracking-tight text-foreground">
+                <p className="font-['Bricolage_Grotesque'] text-sm font-extrabold tracking-tight text-foreground">
                   Best of luck, <span className="text-primary">{fullName}</span>
                 </p>
                 <p className="mt-1 text-[11px] font-medium text-muted-foreground">Read carefully. Trust your preparation.</p>
@@ -2405,7 +2769,9 @@ const isSelected = selectedAnswer === option;
                   <BookOpen className="w-4 h-4 text-primary" />
                   <span className="text-sm font-black uppercase tracking-[0.08em] text-primary">Explanation</span>
                 </div>
-                <p className="text-[0.95rem] font-medium leading-7 text-foreground/85 sm:text-base">{currentMCQ?.explanation || "No explanation provided."}</p>
+                <div className="text-[0.95rem] font-medium leading-7 text-foreground/85 sm:text-base space-y-2.5">
+                  {currentMCQ?.explanation ? renderAiMessageText(currentMCQ.explanation) : "No explanation provided."}
+                </div>
                 {verifiedAgainstBooks.length > 0 && (
                   <div className="mt-3 flex max-w-full flex-nowrap gap-2 overflow-x-auto pb-1">
                     <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
@@ -2441,7 +2807,7 @@ const isSelected = selectedAnswer === option;
                 </div>
 
                 {/* Reference & AI Action Buttons */}
-                <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-3">
+                <div className="mt-4 grid gap-3 grid-cols-1 sm:grid-cols-2">
                   <Button
                     onClick={handleSearchReference}
                     variant="outline"
@@ -2468,6 +2834,9 @@ const isSelected = selectedAnswer === option;
                     )}
                     {isExplainingOptions ? 'Explaining...' : 'Options Explain'}
                   </Button>
+                </div>
+
+                <div className="mt-3">
                   <Button
                     onClick={() => {
                       setChatPrefillPrompt("Can you please explain this question and explanation in more detail?");
@@ -2482,18 +2851,19 @@ const isSelected = selectedAnswer === option;
               </motion.section>
             )}
             </AnimatePresence>
-          </div>
-        </div>
+          </motion.div>
+        </AnimatePresence>
+        )}
+      </div>
 
-      <footer className="relative z-50 border-t border-border/40 bg-gradient-to-t from-background via-background/95 to-background/80 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-6">
+      {!showMcqAiGuide && <footer className="relative z-50 border-t border-border/40 bg-gradient-to-t from-background via-background/95 to-background/80 px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-6">
         <div className="mx-auto flex w-full max-w-4xl items-center gap-3">
           <Button
             variant="outline"
             onClick={() => {
               if (currentQuestionIndex > 0) {
-                hasUserInteractedRef.current = true;
-                setCurrentQuestionIndex(prevIndex => prevIndex - 1);
-                setStartTime(Date.now());
+                setSwipeDirection(-1);
+                goToQuestion(currentQuestionIndex - 1);
               }
             }}
             disabled={currentQuestionIndex === 0}
@@ -2543,8 +2913,59 @@ const isSelected = selectedAnswer === option;
           )}
         </div>
       </footer>
+      }
 
       {/* Modals */}
+      <BottomSheet
+        open={showHeardAboutPrompt}
+        onClose={dismissHeardAboutPrompt}
+        eyebrow="A quick Medmacs question"
+        title="Where did you hear about us?"
+        description="Your answer helps Medmacs reach more medical learners."
+        media={
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-sm">
+            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-8 w-8 object-contain" />
+          </div>
+        }
+        bodyClassName="max-h-[50dvh] pb-1"
+        footer={
+          <button
+            type="button"
+            disabled={isSavingHeardAbout}
+            onClick={dismissHeardAboutPrompt}
+            className="h-11 w-full rounded-xl text-sm font-bold text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:opacity-60"
+          >
+            Not now
+          </button>
+        }
+      >
+        <div className="space-y-2 pb-3">
+          {isLoadingHeardAboutOptions ? (
+            <div className="space-y-2 py-1">
+              <Skeleton className="h-12 w-full rounded-2xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
+            </div>
+          ) : heardAboutOptions.length ? (
+            heardAboutOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={isSavingHeardAbout}
+                onClick={() => void saveHeardAbout(option.value)}
+                className="group flex min-h-12 w-full items-center justify-between gap-3 rounded-2xl border border-border/70 bg-muted/35 px-4 py-3 text-left text-sm font-bold text-foreground transition active:scale-[0.99] hover:border-primary/45 hover:bg-primary/[0.08] disabled:cursor-wait disabled:opacity-60"
+              >
+                <span>{option.label}</span>
+                <ChevronLeft className="h-4 w-4 shrink-0 rotate-180 text-primary transition-transform group-hover:translate-x-0.5" />
+              </button>
+            ))
+          ) : (
+            <p className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-5 text-center text-sm font-medium text-muted-foreground">
+              Options are loading. Please try again in a moment.
+            </p>
+          )}
+        </div>
+      </BottomSheet>
       {hasOpenedSettingsMenu && <MCQSettingsModal
         isOpen={showSettingsModal}
         onClose={() => setShowSettingsModal(false)}
@@ -2571,8 +2992,21 @@ const isSelected = selectedAnswer === option;
           localStorage.setItem('aiPopupsDisabled', String(newVal));
           toast({ title: newVal ? "🤖 AI Popups Disabled" : "🤖 AI Popups Enabled" });
         }}
+        glossaryEnabled={glossaryEnabled}
+        toggleGlossary={() => {
+          const newVal = !glossaryEnabled;
+          setGlossaryEnabled(newVal);
+          localStorage.setItem('mcqGlossaryDisabled', String(!newVal));
+          triggerHaptic(15);
+          toast({ title: newVal ? "📖 Medical Glossary Enabled" : "📖 Medical Glossary Disabled" });
+        }}
         onReport={() => { setShowSettingsModal(false); setShowReportModal(true); }}
         isPremium={canRevealAllAnswers}
+        onRequireUpgrade={() => {
+          setShowSettingsModal(false);
+          setUpgradeModalMessage("Reveal All Answers is an exclusive Premium feature. Upgrade your plan to instantly view all answers and explanations!");
+          setShowUpgradeModal(true);
+        }}
         hapticsEnabled={hapticsEnabled}
         toggleHaptics={() => {
           const newVal = !hapticsEnabled;
@@ -2639,7 +3073,43 @@ const isSelected = selectedAnswer === option;
         />
       )}
       <MCQQuestionMapDrawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <QuestionMapGrid />
+        <div className="grid grid-cols-4 sm:grid-cols-5 gap-2">
+          {mcqs.map((mcq, index) => {
+            const isCurrent = currentQuestionIndex === index;
+            const userRecord = answeredQuestions[mcq.id];
+            const isAnswered = userRecord !== undefined;
+            const isCorrect = isAnswered && userRecord.selectedAnswer === mcq.correct_answer;
+
+            let btnClass = 'bg-muted text-muted-foreground border border-transparent';
+            if (isCurrent) {
+              btnClass = 'bg-gradient-to-br from-primary to-blue-600 text-white border-transparent shadow-lg shadow-primary/30';
+            } else if (isAnswered) {
+              btnClass = isCorrect
+                ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700'
+                : 'bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700';
+            }
+
+            return (
+              <button
+                key={mcq.id}
+                type="button"
+                className={`relative h-10 w-full rounded-xl text-sm font-bold transition-[background-color,border-color,color,box-shadow] duration-150 ${btnClass}`}
+                onClick={() => goToQuestion(index)}
+              >
+                {queuedAnswerIds.has(mcq.id) && (
+                  <Clock className="absolute right-1 top-1 h-2.5 w-2.5 text-amber-500" />
+                )}
+                {index + 1}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-4 text-xs text-muted-foreground space-y-1.5">
+          <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-gradient-to-br from-primary to-blue-600 mr-2" />Current</p>
+          <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-emerald-500 mr-2" />Correct</p>
+          <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-rose-500 mr-2" />Incorrect</p>
+          <p className="flex items-center"><span className="inline-block w-3 h-3 rounded-full bg-muted mr-2" />Unanswered</p>
+        </div>
       </MCQQuestionMapDrawer>
 
       {currentMCQ && (
@@ -2654,12 +3124,23 @@ const isSelected = selectedAnswer === option;
             userPlan={userPlanForChatbot}
             isHidden={showExplanation || !effectiveQuickSubmit}
             isOnline={isOnline}
-            onOpen={() => setIsChatbotOpen(true)}
+            isGuided={showMcqAiGuide}
+            onOpen={() => {
+              completeMcqAiGuide();
+              setIsChatbotOpen(true);
+            }}
             onQuestionHelp={() => setUsedAiHelpByQuestion(prev => ({ ...prev, [currentMCQ.id]: true }))}
             prefillPrompt={chatPrefillPrompt}
           />
         </Suspense>
       )}
+
+      {/* Medical Glossary Bottom Sheet Modal */}
+      <GlossaryTermModal
+        term={selectedGlossaryTerm}
+        open={isGlossaryModalOpen}
+        onClose={() => setIsGlossaryModalOpen(false)}
+      />
 
     </div>
   );

@@ -49,14 +49,15 @@ begin
 
   insert into fcps_subject_seed (subject_key, subject_name, specialty, paper, display_order)
   values
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Anatomy Histology Embryology (Paper 1)', 'medicine_allied', 1, 101),
+    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Embryology (Paper 1)', 'medicine_allied', 1, 101),
+    ('medicine_allied:histology:paper_1', 'Histology (Paper 1)', 'medicine_allied', 1, 102),
     ('medicine_allied:physiology:paper_1', 'Physiology (Paper 1)', 'medicine_allied', 1, 102),
     ('medicine_allied:biochemistry:paper_1', 'Biochemistry (Paper 1)', 'medicine_allied', 1, 103),
     ('medicine_allied:pharmacology:paper_1', 'Pharmacology (Paper 1)', 'medicine_allied', 1, 104),
     ('medicine_allied:general_pathology_microbiology_immunology:paper_1', 'General Pathology Microbiology Immunology (Paper 1)', 'medicine_allied', 1, 105),
     ('medicine_allied:research_biostatistics:paper_1', 'Research Biostatistics (Paper 1)', 'medicine_allied', 1, 106),
     ('medicine_allied:behavioural_science_medical_ethics:paper_1', 'Behavioural Science Medical Ethics (Paper 1)', 'medicine_allied', 1, 107),
-    ('medicine_allied:anatomy_histology_embryology:paper_2', 'Anatomy Histology Embryology (Paper 2)', 'medicine_allied', 2, 201),
+    ('medicine_allied:anatomy_histology_embryology:paper_2', 'Anatomy (Paper 2)', 'medicine_allied', 2, 201),
     ('medicine_allied:physiology:paper_2', 'Physiology (Paper 2)', 'medicine_allied', 2, 202),
     ('medicine_allied:biochemistry:paper_2', 'Biochemistry (Paper 2)', 'medicine_allied', 2, 203),
     ('medicine_allied:pharmacology:paper_2', 'Pharmacology (Paper 2)', 'medicine_allied', 2, 204),
@@ -91,17 +92,17 @@ begin
     ('medicine_allied:anatomy_histology_embryology:paper_1', 'Normal Defective Development - Respiratory System', 7),
     ('medicine_allied:anatomy_histology_embryology:paper_1', 'Normal Defective Development - Special Senses', 8),
     ('medicine_allied:anatomy_histology_embryology:paper_1', 'Normal Defective Development - Urogenital System', 9),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'General Histology - Connective Tissue Bone Cartilage', 10),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'General Histology - Epithelia Cell Junctions', 11),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'General Histology - Muscular Tissue', 12),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'General Histology - Nervous Tissue', 13),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Endocrine System', 14),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Gastrointestinal Tract', 15),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Immune Lymphatic System', 16),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Integumentary System', 17),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Respiratory System', 18),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Special Senses', 19),
-    ('medicine_allied:anatomy_histology_embryology:paper_1', 'Special Histology - Urinary Reproductive System', 20),
+    ('medicine_allied:histology:paper_1', 'General Histology - Connective Tissue Bone Cartilage', 1),
+    ('medicine_allied:histology:paper_1', 'General Histology - Epithelia Cell Junctions', 2),
+    ('medicine_allied:histology:paper_1', 'General Histology - Muscular Tissue', 3),
+    ('medicine_allied:histology:paper_1', 'General Histology - Nervous Tissue', 4),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Endocrine System', 5),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Gastrointestinal Tract', 6),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Immune Lymphatic System', 7),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Integumentary System', 8),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Respiratory System', 9),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Special Senses', 10),
+    ('medicine_allied:histology:paper_1', 'Special Histology - Urinary Reproductive System', 11),
     ('medicine_allied:physiology:paper_1', 'Cell Nerve Muscle - Cell Nerve Muscle', 1),
     ('medicine_allied:physiology:paper_1', 'Blood Immunity - Blood Immunity', 2),
     ('medicine_allied:physiology:paper_1', 'Exercise Unusual Environment - Exercise Environment', 3),
@@ -252,8 +253,8 @@ begin
 
   -- Expose both Medicine & Allied and Surgery & Allied.
 
-  if (select count(*) from fcps_subject_seed) <> 24 then
-    raise exception 'FCPS subject seed must contain exactly 24 subjects';
+  if (select count(*) from fcps_subject_seed) <> 25 then
+    raise exception 'FCPS subject seed must contain exactly 25 subjects';
   end if;
 
   if (select count(*) from fcps_chapter_seed) <> 167 then
@@ -295,7 +296,8 @@ begin
       into v_chapter_id
       from public.chapters c
       where c.subject_id = v_subject_id
-        and lower(c.name) = lower(v_chapter.chapter_name)
+        and (lower(c.name) = lower(v_chapter.chapter_name)
+          or lower(to_jsonb(c)->>'original_name') = lower(v_chapter.chapter_name))
       limit 1;
 
       if v_chapter_id is null then
@@ -310,7 +312,7 @@ begin
   end loop;
 end $$;
 
--- Post-run verification: expected result is 12 subjects and 117 chapters.
+-- Post-run verification: expected result is 25 subjects and 167 chapters.
 select
   count(distinct s.id) as subject_count,
   count(c.id) as chapter_count

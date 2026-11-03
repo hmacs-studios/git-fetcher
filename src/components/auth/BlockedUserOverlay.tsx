@@ -113,10 +113,7 @@ const BlockedUserOverlay: React.FC<BlockedUserOverlayProps> = ({ details, onSign
           alt="Medmacs"
           className="h-9 w-9 object-contain"
         />
-        <span className="font-['Syne'] text-sm font-extrabold tracking-[-.045em]">
-          <span className="bg-gradient-to-r from-cyan-600 via-sky-500 to-teal-600 bg-clip-text text-transparent">Medmacs</span>
-          <span className="text-slate-950">.app</span>
-        </span>
+        <span className="brand-wordmark text-lg text-slate-950">Medmacs</span>
       </div>
 
       <motion.div
@@ -126,7 +123,7 @@ const BlockedUserOverlay: React.FC<BlockedUserOverlayProps> = ({ details, onSign
         className="relative z-10 w-full max-w-xl text-center"
       >
         <p className="mb-3 text-xs font-black uppercase tracking-[0.22em] text-cyan-600">Access paused</p>
-        <h1 className="font-['Syne'] text-[clamp(2.2rem,9vw,3.3rem)] font-extrabold leading-[0.98] tracking-[-.055em] text-slate-950">
+        <h1 className="font-['Bricolage_Grotesque'] text-[clamp(2.2rem,9vw,3.3rem)] font-extrabold leading-[0.98] tracking-[-.055em] text-slate-950">
           Account Restricted
         </h1>
         <p className="mx-auto mt-4 max-w-md text-sm font-semibold leading-6 text-slate-500">

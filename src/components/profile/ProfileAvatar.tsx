@@ -468,7 +468,7 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
             <Sheet open={showAvatarEditDialog} onOpenChange={(open) => { if (!open) resetDialogState(); else setShowAvatarEditDialog(true); }}>
                 <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto px-6 pt-6 pb-8 max-w-lg mx-auto border-t border-border shadow-2xl">
                     <SheetHeader className="text-left mb-3">
-                        <SheetTitle className="flex items-center gap-2 text-xl font-bold font-syne">
+                        <SheetTitle className="flex items-center gap-2 text-xl font-bold font-['Bricolage_Grotesque']">
                             <ImageIcon className="h-5 w-5 text-primary" /> Edit Profile Picture
                         </SheetTitle>
                         <SheetDescription>
@@ -597,7 +597,7 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
             <Sheet open={showMediaPickerModal} onOpenChange={setShowMediaPickerModal}>
                 <SheetContent side="bottom" className="rounded-t-3xl max-h-[85vh] overflow-y-auto px-6 pt-6 pb-8 max-w-lg mx-auto border-t border-border shadow-2xl">
                     <SheetHeader className="text-left mb-3">
-                        <SheetTitle className="text-2xl font-bold font-syne text-foreground tracking-tight">
+                        <SheetTitle className="text-2xl font-bold font-['Bricolage_Grotesque'] text-foreground tracking-tight">
                             Select A Picture
                         </SheetTitle>
                         <SheetDescription>
@@ -612,7 +612,7 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
                                 <Lock className="h-8 w-8" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-base font-syne">Android Permission Required</h3>
+                                <h3 className="font-bold text-base font-['Bricolage_Grotesque']">Android Permission Required</h3>
                                 <p className="text-xs text-muted-foreground mt-1 max-w-xs">
                                     Medmacs requires permission to access your device photos and media library.
                                 </p>
@@ -627,7 +627,7 @@ const ProfileAvatar = ({ user, profileData, displayName, rawUserPlan, userPlanDi
                                 <FileImage className="h-8 w-8" />
                             </div>
                             <div>
-                                <h3 className="font-bold text-base font-syne">Permission Granted</h3>
+                                <h3 className="font-bold text-base font-['Bricolage_Grotesque']">Permission Granted</h3>
                                 <p className="text-xs text-muted-foreground mt-1 max-w-xs mx-auto">
                                     Your Android media permission is active. Click below to select a picture from your device gallery.
                                 </p>

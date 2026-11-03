@@ -112,8 +112,7 @@ BEGIN
             a.response_time_seconds || 's' AS time_taken
         FROM public.daily_game_attempts a
         JOIN public.profiles p ON p.id = a.user_id
-        WHERE a.year = p_year 
-          AND a.cycle_date >= (v_cycle_date - INTERVAL '3 days')::DATE
+        WHERE a.cycle_date >= (v_cycle_date - INTERVAL '3 days')::DATE
           AND a.cycle_date < v_cycle_date
           AND a.is_correct = TRUE
         ORDER BY a.cycle_date DESC, a.response_time_seconds ASC, a.created_at ASC
@@ -128,22 +127,36 @@ BEGIN
     INTO v_prev_winner
     FROM public.daily_game_attempts a
     JOIN public.profiles p ON p.id = a.user_id
-    WHERE a.year = p_year AND a.cycle_date = v_prev_cycle_date AND a.is_correct = TRUE
+    WHERE a.cycle_date = v_prev_cycle_date AND a.is_correct = TRUE
     ORDER BY a.response_time_seconds ASC, a.created_at ASC
     LIMIT 1;
 
     -- Fetch Today's Top 3 Leaders
-    SELECT jsonb_agg(l) INTO v_today_leaders
+    SELECT jsonb_agg(
+        jsonb_build_object(
+            'full_name', l.full_name,
+            'institute', l.institute,
+            'avatar_url', l.avatar_url,
+            'time_taken', l.response_time_seconds || 's'
+        ) ORDER BY l.response_time_seconds ASC, l.created_at ASC
+    ) INTO v_today_leaders
     FROM (
-        SELECT 
-            p.full_name,
-            p.institute,
-            p.avatar_url,
-            a.response_time_seconds || 's' AS time_taken
-        FROM public.daily_game_attempts a
-        JOIN public.profiles p ON p.id = a.user_id
-        WHERE a.year = p_year AND a.cycle_date = v_cycle_date AND a.is_correct = TRUE
-        ORDER BY a.response_time_seconds ASC, a.created_at ASC
+        SELECT per_user.full_name, per_user.institute, per_user.avatar_url,
+               per_user.response_time_seconds, per_user.created_at
+        FROM (
+            SELECT DISTINCT ON (a.user_id)
+                a.user_id,
+                p.full_name,
+                p.institute,
+                p.avatar_url,
+                a.response_time_seconds,
+                a.created_at
+            FROM public.daily_game_attempts a
+            JOIN public.profiles p ON p.id = a.user_id
+            WHERE a.cycle_date = v_cycle_date AND a.is_correct = TRUE
+            ORDER BY a.user_id, a.response_time_seconds ASC, a.created_at ASC
+        ) per_user
+        ORDER BY per_user.response_time_seconds ASC, per_user.created_at ASC
         LIMIT 3
     ) l;
 
@@ -156,7 +169,7 @@ BEGIN
     INTO v_today_leader
     FROM public.daily_game_attempts a
     JOIN public.profiles p ON p.id = a.user_id
-    WHERE a.year = p_year AND a.cycle_date = v_cycle_date AND a.is_correct = TRUE
+    WHERE a.cycle_date = v_cycle_date AND a.is_correct = TRUE
     ORDER BY a.response_time_seconds ASC, a.created_at ASC
     LIMIT 1;
 

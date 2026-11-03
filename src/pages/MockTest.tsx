@@ -491,7 +491,7 @@ const MockTest = () => {
     <div className="min-h-screen w-full bg-gradient-to-br from-white via-purple-50/30 to-pink-50/30 dark:bg-gradient-to-br dark:from-gray-900 dark:via-purple-900/10 dark:to-pink-900/10 flex flex-col">
       <Seo
         title="Mock Test"
-        description="Take full-length mock tests on Medmacs App to simulate real MDCAT exam conditions and evaluate your readiness."
+        description="Take full-length mock tests on Medmacs to simulate real Medical exam conditions and evaluate your readiness."
         canonical="https://medmacs.app/mock-test"
       />
       {/* Header - Reused from Dashboard */}

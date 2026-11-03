@@ -73,22 +73,17 @@ const FLPResultsPage = () => {
             
             {/* Header */}
             <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-950/75 backdrop-blur-md border-b border-slate-200/60 dark:border-white/10 pt-[env(safe-area-inset-top)]">
-                <div className="container mx-auto px-5 h-16 flex justify-between items-center max-w-4xl">
-                    <Link to="/flp" className="flex items-center space-x-2 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors">
-                        <ArrowLeft className="w-5 h-5" />
-                    </Link>
-                    <div className="flex items-center space-x-2">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" className="w-8 h-8 object-contain" />
-                        <span className="text-lg font-black tracking-tight italic uppercase">FLP Attempts</span>
-                    </div>
-                    <ProfileDropdown />
+                <div className="container mx-auto grid h-14 max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-5">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-slate-950 dark:text-white">FLP Attempts</h1>
+                    <div className="justify-self-end"><ProfileDropdown /></div>
                 </div>
             </header>
 
             <main className="container mx-auto px-5 pt-8 max-w-4xl space-y-8">
                 {/* Hero section */}
                 <div className="text-center md:text-left space-y-2 max-w-2xl">
-                    <h1 className="font-['Syne'] text-3xl md:text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white">
+                    <h1 className="font-['Bricolage_Grotesque'] text-3xl md:text-4xl font-extrabold tracking-tight text-slate-950 dark:text-white">
                         FLP Results History
                     </h1>
                     <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">

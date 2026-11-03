@@ -73,6 +73,7 @@ interface AIChatbotProps {
   onQuestionHelp?: () => void;
   isOnline?: boolean;
   prefillPrompt?: string;
+  isGuided?: boolean;
 }
 
 export const AIChatbot: React.FC<AIChatbotProps> = ({
@@ -87,7 +88,8 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
   onOpen,
   onQuestionHelp,
   isOnline = true,
-  prefillPrompt = ''
+  prefillPrompt = '',
+  isGuided = false,
 }) => {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -312,7 +314,7 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
       <AnimatePresence>
         {!isHidden && (
           <motion.div
-            className="fixed bottom-6 right-4 z-50 flex items-center justify-center"
+            className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] right-4 z-50 flex items-center justify-center ${isGuided ? 'scale-125' : ''}`}
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             initial={{ opacity: 0, scale: 0.5, y: 20 }}
@@ -336,8 +338,20 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
               />
             )}
 
+            {isGuided && (
+              <>
+                <motion.span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -inset-5 rounded-full border-2 border-primary/55"
+                  animate={{ scale: [0.9, 1.35], opacity: [0.8, 0] }}
+                  transition={{ duration: 1.5, repeat: Infinity, ease: 'easeOut' }}
+                />
+                <span aria-hidden="true" className="pointer-events-none absolute -inset-3 rounded-full bg-primary/35 blur-xl" />
+              </>
+            )}
+
             {/* External circle wrapper with prominent shadow & gradient border */}
-            <div className="relative p-1 rounded-full bg-gradient-to-br from-primary via-blue-500 to-indigo-600 shadow-2xl shadow-primary/50 border-2 border-white/60 dark:border-zinc-800">
+            <div className={`relative rounded-full bg-gradient-to-br from-primary via-blue-500 to-indigo-600 shadow-2xl shadow-primary/50 border-2 border-white/60 dark:border-zinc-800 ${isGuided ? 'p-1.5 ring-4 ring-primary/30' : 'p-1'}`}>
               <Button
                 type="button"
                 onClick={onOpen}
@@ -382,7 +396,7 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
                     <img src="/lovable-uploads/Mascot-mini.png" alt="Dr. Ahroid" className="h-full w-full object-contain" />
                   </div>
                   <div>
-                    <span className="font-['Syne'] text-sm font-extrabold tracking-[-0.03em] text-foreground">Dr. <span className="text-primary">Ahroid</span></span>
+                    <span className="font-['Bricolage_Grotesque'] text-sm font-extrabold tracking-[-0.03em] text-foreground">Dr. <span className="text-primary">Ahroid</span></span>
                     <p className="text-[10px] text-muted-foreground">AI Study Assistant</p>
                   </div>
                 </div>
@@ -415,7 +429,7 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
                       <div className="mb-4 h-16 w-16 overflow-hidden">
                         <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-full w-full object-contain" />
                       </div>
-                      <p className="font-['Syne'] text-base font-extrabold tracking-[-0.03em] text-foreground">Ask me anything</p>
+                      <p className="font-['Bricolage_Grotesque'] text-base font-extrabold tracking-[-0.03em] text-foreground">Ask me anything</p>
                       <p className="text-xs text-muted-foreground mt-1">I'm Dr. Ahroid, your MBBS tutor.</p>
                     </div>
                   ) : (
@@ -499,7 +513,7 @@ export const AIChatbot: React.FC<AIChatbotProps> = ({
               {/* Help button */}
               {questionContext && (
                 <div className="flex-shrink-0 border-t border-border/30 px-3 py-2">
-                  <Button variant="outline" size="sm" onClick={handleQuestionHelp} disabled={!isOnline} className="h-9 w-full rounded-xl border-border/50 bg-background/40 font-['Syne'] text-xs backdrop-blur-lg">
+                  <Button variant="outline" size="sm" onClick={handleQuestionHelp} disabled={!isOnline} className="h-9 w-full rounded-xl border-border/50 bg-background/40 font-['Bricolage_Grotesque'] text-xs backdrop-blur-lg">
                     Help with current question
                   </Button>
                 </div>

@@ -157,7 +157,7 @@ const CareerAmbassador = () => {
         <div className="min-h-screen w-full bg-white dark:bg-gray-900">
             <Seo
             title="Career Opportunities"
-            description="Explore exciting career opportunities at Medmacs App. Join our team and contribute to revolutionizing medical education."
+            description="Explore exciting career opportunities at Medmacs. Join our team and contribute to revolutionizing medical education."
             canonical="https://medmacs.app/career"
             />
 

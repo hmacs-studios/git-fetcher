@@ -17,6 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { prepareMCQQuiz } from '@/features/mcq/quizBootstrap';
 import { isConstrainedConnection } from '@/utils/networkQuality';
+import DoctorMascotLoader from '@/components/loader/DoctorMascotLoader';
 
 const ChapterProgressRing = ({
   attempted,
@@ -132,7 +133,6 @@ const MCQChapterSelectionPage = () => {
       if (allChapters.length === 0 || !user?.id) return {};
 
       const chapterIds = allChapters.map(ch => ch.id);
-      const chapterIdSet = new Set(chapterIds);
 
       const { data: compactProgress, error: compactProgressError } = await supabase
         .rpc('get_mcq_chapter_progress', { p_chapter_ids: chapterIds });
@@ -147,25 +147,9 @@ const MCQChapterSelectionPage = () => {
         }, {});
       }
 
-      const { data: answerRows, error } = await supabase
-        .from('user_answers')
-        .select('mcq_id, mcqs(chapter_id)')
-        .eq('user_id', user.id);
-
-      if (error || !answerRows) return {};
-
-      const typedAnswerRows = answerRows as Array<{
-        mcq_id: string | null;
-        mcqs: Array<{ chapter_id: string | null }> | null;
-      }>;
-      const attemptedMcqIds = new Set(typedAnswerRows.map(answer => answer.mcq_id).filter(Boolean));
-      return typedAnswerRows.reduce<Record<string, number>>((acc, answer) => {
-        if (!answer.mcq_id || !attemptedMcqIds.delete(answer.mcq_id)) return acc;
-        const chapterId = answer.mcqs?.[0]?.chapter_id;
-        if (!chapterId || !chapterIdSet.has(chapterId)) return acc;
-        acc[chapterId] = (acc[chapterId] || 0) + 1;
-        return acc;
-      }, {});
+      // Progress badges are non-blocking. Never scan the full answer history
+      // when the compact projection is temporarily unavailable.
+      return {};
     },
     enabled: Boolean(user?.id) && allChapters.length > 0 && !isOfflineMode
   });
@@ -356,7 +340,7 @@ const MCQChapterSelectionPage = () => {
                 {subject?.name}
               </motion.p>
               <motion.h2
-                 className="font-['Syne'] mt-1.5 text-2xl font-bold uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]"
+                 className="brand-display mt-1.5 text-2xl uppercase italic leading-none tracking-[-0.03em] text-foreground sm:text-[1.75rem]"
                 variants={reduceMotion ? undefined : titleSlide}
                 initial="hidden"
                 animate="visible"
@@ -420,8 +404,13 @@ const MCQChapterSelectionPage = () => {
       <div className="no-scrollbar relative z-10 min-h-0 flex-1 overflow-y-auto pb-36">
         <div className="mx-auto w-full max-w-2xl px-4 sm:px-0">
           {loading ? (
-            <div className="divide-y divide-border/50 border-b border-border/50">
-              {Array.from({ length: 8 }).map((_, i) => <ChapterRowSkeleton key={i} />)}
+            <div className="py-8 flex flex-col items-center justify-center">
+              <DoctorMascotLoader
+                variant="inline"
+                size="sm"
+                label="Loading chapters..."
+                showSubtext={true}
+              />
             </div>
           ) : loadError ? (
             <div className="px-4 py-14 text-center">

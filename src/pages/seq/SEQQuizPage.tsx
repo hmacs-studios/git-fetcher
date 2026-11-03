@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -6,22 +6,52 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/useAuth';
 import { MCQPageLayout } from '@/pages/mcq/MCQPageLayout';
 import { Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { fetchSEQByChapter, evaluateSEQAnswer, saveSEQAnswer, getUserSEQAnswersByChapter, getFirstUnattemptedSEQIndex, SEQ, SEQEvaluationResult } from '@/utils/mcqData';
-import { useReferenceSearch } from '@/hooks/useReferenceSearch';
 import { SEQQuizSkeleton, SEQResultSkeleton } from '@/components/skeletons/SEQSkeleton';
 import { 
   Clock, CheckCircle, XCircle, Bot, BookOpen, Loader2, 
   ArrowRight, AlertCircle, Sparkles, ThumbsUp, ThumbsDown, Mail,
-  List, X
+  FlaskConical, List, X
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { useFeatureAccess } from '@/hooks/useFeatureAccess';
+import { supabase } from '@/integrations/supabase/client';
+
+const LazyAIChatbot = lazy(() =>
+  import('@/components/mcq/AIChatbot').then((module) => ({ default: module.AIChatbot })),
+);
+
+type SEQBetaBannerSettings = {
+  enabled: boolean;
+  version: string;
+  message: string;
+  report_label?: string;
+};
+
+const parseSEQBetaBannerSettings = (value: string | null | undefined): SEQBetaBannerSettings | null => {
+  if (!value) return null;
+
+  try {
+    const parsed = JSON.parse(value) as Partial<SEQBetaBannerSettings>;
+    if (!parsed.enabled || !parsed.version || !parsed.message) return null;
+
+    return {
+      enabled: true,
+      version: parsed.version,
+      message: parsed.message,
+      report_label: parsed.report_label || 'Report an issue',
+    };
+  } catch {
+    return null;
+  }
+};
 
 
 const SEQQuizPage = () => {
@@ -36,6 +66,7 @@ const SEQQuizPage = () => {
   const { subjectId, chapterId } = useParams<{ subjectId: string; chapterId: string }>();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { planTier } = useFeatureAccess('ai_tutor');
   const { toast } = useToast();
   const startTimeRef = useRef<number>(Date.now());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -47,7 +78,6 @@ const SEQQuizPage = () => {
   const [result, setResult] = useState<SEQEvaluationResult | null>(null);
   const [allSEQs, setAllSEQs] = useState<SEQ[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [references, setReferences] = useState('');
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [showEvaluatingSkeleton, setShowEvaluatingSkeleton] = useState(false);
   const [previousAnswers, setPreviousAnswers] = useState<Record<string, {
@@ -59,20 +89,52 @@ const SEQQuizPage = () => {
     createdAt: string;
   }>>({});
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isChatbotOpen, setIsChatbotOpen] = useState(false);
+  const [showAiLocked, setShowAiLocked] = useState(false);
+  const [chatPrefillPrompt, setChatPrefillPrompt] = useState('');
+  const [betaBannerDismissal, setBetaBannerDismissal] = useState<{ version: string; dismissed: boolean } | null>(null);
   const evaluationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const { data: profile, isLoading: profileLoading } = useQuery({
-    queryKey: ['profile-plan', user?.id],
+  const betaBannerQuery = useQuery<SEQBetaBannerSettings | null>({
+    queryKey: ['seq-beta-banner'],
     queryFn: async () => {
-      if (!user?.id) return null;
-      const { data } = await supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle();
-      return data;
+      const { data, error } = await supabase
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_name', 'seq_beta_banner')
+        .maybeSingle();
+
+      if (error) return null;
+      return parseSEQBetaBannerSettings(data?.setting_value);
     },
-    enabled: !!user?.id
+    staleTime: 1000 * 60 * 2,
   });
 
-  const { search: searchReference, loading: isSearchingReference, data: referenceData } = useReferenceSearch();
-  const referenceResults = referenceData?.results || [];
+  const betaBanner = betaBannerQuery.data;
+  const betaBannerStorageKey = betaBanner ? `seq-beta-banner-dismissed:${betaBanner.version}` : null;
+  const isBetaBannerVisible = Boolean(
+    betaBanner?.enabled
+    && betaBannerStorageKey
+    && betaBannerDismissal?.version === betaBanner.version
+    && !betaBannerDismissal.dismissed,
+  );
+
+  useEffect(() => {
+    if (!betaBannerStorageKey) {
+      setBetaBannerDismissal(null);
+      return;
+    }
+
+    setBetaBannerDismissal({
+      version: betaBanner!.version,
+      dismissed: window.localStorage.getItem(betaBannerStorageKey) === 'true',
+    });
+  }, [betaBanner?.version, betaBannerStorageKey]);
+
+  const dismissBetaBanner = () => {
+    if (betaBannerStorageKey) window.localStorage.setItem(betaBannerStorageKey, 'true');
+    if (betaBanner) setBetaBannerDismissal({ version: betaBanner.version, dismissed: true });
+  };
 
   useEffect(() => {
     const loadSEQs = async () => {
@@ -109,26 +171,9 @@ const SEQQuizPage = () => {
     loadSEQs();
   }, [chapterId, user?.id]);
 
-  useEffect(() => {
-    if (currentSEQ?.question) {
-      searchReference(currentSEQ.question, 3);
-    }
-  }, [currentSEQ?.id]);
-
-  useEffect(() => {
-    if (referenceResults.length > 0) {
-      const refText = referenceResults.map((r: any) => {
-        const bookInfo = r.book ? `[${r.book}${r.page ? `, p.${r.page}` : ''}]` : '';
-        const content = r.text || r.content || "";
-        return `${bookInfo}\n${content}`.trim();
-      }).join("\n\n");
-      setReferences(refText);
-    }
-  }, [referenceResults]);
-
   const evaluateMutation = useMutation({
-    mutationFn: async ({ userAnswer, question }: { userAnswer: string; question: string }) => {
-      const evaluation = await evaluateSEQAnswer(userAnswer, question, references);
+    mutationFn: async ({ userAnswer, question, broadAnswer, accurateAnswer, keywords }: { userAnswer: string; question: string; broadAnswer: string; accurateAnswer: string; keywords?: string[] | string | null }) => {
+      const evaluation = await evaluateSEQAnswer(userAnswer, question, broadAnswer, accurateAnswer, Array.isArray(keywords) ? keywords : (keywords ? [keywords] : []));
       return evaluation;
     },
     onSuccess: async (evaluation) => {
@@ -190,7 +235,10 @@ const SEQQuizPage = () => {
     
     evaluateMutation.mutate({
       userAnswer,
-      question: currentSEQ.question
+      question: currentSEQ.question,
+      broadAnswer: currentSEQ.broad_answer || currentSEQ.model_answer,
+      accurateAnswer: currentSEQ.model_answer,
+      keywords: currentSEQ.keywords
     });
   };
 
@@ -264,7 +312,7 @@ const SEQQuizPage = () => {
 
   const getSatisfactionBadge = (index: number) => {
     if (index >= 80) return { bg: 'bg-green-500', text: 'text-green-500', label: 'Excellent' };
-    if (index >= 50) return { bg: 'bg-orange-500', text: 'text-orange-500', label: 'Good' };
+    if (index >= 50) return { bg: 'bg-primary', text: 'text-primary', label: 'Good' };
     return { bg: 'bg-red-500', text: 'text-red-500', label: 'Needs Work' };
   };
 
@@ -273,25 +321,20 @@ const SEQQuizPage = () => {
     return text.substring(0, maxLength) + '...';
   };
 
-  const getSatisfactionColor = (index: number) => {
-    if (index >= 80) return 'text-green-500';
-    if (index >= 50) return 'text-orange-500';
-    return 'text-red-500';
-  };
-
-  const getSatisfactionBg = (index: number) => {
-    if (index >= 80) return 'bg-green-500';
-    if (index >= 50) return 'bg-orange-500';
-    return 'bg-red-500';
-  };
-
-  if (authLoading || profileLoading || isLoadingSEQs) {
+  if (authLoading || isLoadingSEQs) {
     return (
-      <MCQPageLayout backTo="/seqs">
-        <div className="max-w-4xl mx-auto">
+      <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground">
+        <header className="relative z-50 border-b border-border/40 bg-background/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-xl sm:px-6">
+          <div className="relative mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+            <Skeleton className="h-9 w-9 rounded-xl" />
+            <h1 className="brand-wordmark text-xl text-foreground">Short Questions</h1>
+            <Skeleton className="justify-self-end h-9 w-9 rounded-xl" />
+          </div>
+        </header>
+        <main className="relative z-10 flex-1 overflow-y-auto overscroll-contain">
           <SEQQuizSkeleton />
-        </div>
-      </MCQPageLayout>
+        </main>
+      </div>
     );
   }
 
@@ -300,12 +343,12 @@ const SEQQuizPage = () => {
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-4 text-center">
         <Card className="w-full max-w-md bg-card/90 backdrop-blur-sm border-border shadow-lg p-6">
           <CardHeader className="mb-4">
-            <Lock className="w-16 h-16 mx-auto text-orange-500 mb-4" />
+            <Lock className="w-16 h-16 mx-auto text-primary mb-4" />
             <CardTitle className="text-2xl font-bold text-foreground">Access Restricted</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground mb-6">Please log in to access the SEQ practice section.</p>
-            <Button asChild className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-4 rounded-lg shadow-md">
+            <Button asChild className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg shadow-md">
               <Link to="/login">Go to Login</Link>
             </Button>
           </CardContent>
@@ -319,7 +362,7 @@ const SEQQuizPage = () => {
       <MCQPageLayout backTo="/seqs">
         <div className="text-center py-20">
           <p className="text-muted-foreground">No SEQ found for this chapter.</p>
-          <Button onClick={() => navigate('/seqs')} className="mt-4 bg-orange-500 hover:bg-orange-600">
+          <Button onClick={() => navigate('/seqs')} className="mt-4 bg-primary hover:bg-primary/90">
             Go Back
           </Button>
         </div>
@@ -328,14 +371,62 @@ const SEQQuizPage = () => {
   }
 
   return (
-    <MCQPageLayout backAction={handleBack} backLabel="Back to Chapters">
-      <Button
-        onClick={() => setIsDrawerOpen(true)}
-        className="fixed left-3 top-1/2 -translate-y-1/2 z-[60] h-12 w-12 p-0 rounded-full bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/30 lg:left-4"
-        size="icon"
-      >
-        <List className="w-5 h-5" />
-      </Button>
+    <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground">
+      <header className="relative z-50 border-b border-border/40 bg-background/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-xl sm:px-6">
+        <div className="relative mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+          <div className="flex min-w-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsDrawerOpen(true)}
+              className="h-9 w-9 shrink-0 rounded-xl"
+              aria-label="Open question map"
+            >
+              <List className="h-5 w-5" />
+            </Button>
+          </div>
+          <h1 className="brand-wordmark text-xl text-foreground">Short Questions</h1>
+          <div aria-hidden="true" />
+        </div>
+      </header>
+
+      <AnimatePresence initial={false}>
+        {isBetaBannerVisible && betaBanner && (
+          <motion.aside
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="relative z-40 overflow-hidden border-b border-primary/15 bg-primary/[0.06]"
+            aria-label="Short Questions beta notice"
+          >
+            <div className="mx-auto flex w-full max-w-4xl items-start gap-3 px-4 py-2.5 sm:px-6">
+              <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+              <p className="min-w-0 flex-1 text-xs leading-relaxed text-foreground/80 sm:text-sm">
+                <span className="font-bold text-foreground">Beta:</span>{' '}
+                {betaBanner.message}{' '}
+                <button
+                  type="button"
+                  onClick={() => navigate('/contact-us?subject=seq-beta-feedback')}
+                  className="font-bold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  {betaBanner.report_label}
+                </button>
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={dismissBetaBanner}
+                className="-mr-2 -mt-1 h-9 w-9 shrink-0 rounded-lg text-muted-foreground hover:text-foreground"
+                aria-label="Dismiss beta notice"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {isDrawerOpen && (
@@ -357,7 +448,7 @@ const SEQQuizPage = () => {
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <div>
                   <h2 className="text-lg font-black uppercase italic tracking-tight text-foreground">
-                    All <span className="text-orange-500">Questions</span>
+                    All <span className="text-primary">Questions</span>
                   </h2>
                   <p className="text-xs text-muted-foreground">{allSEQs.length} questions in this set</p>
                 </div>
@@ -386,14 +477,14 @@ const SEQQuizPage = () => {
                       transition={{ delay: index * 0.02 }}
                       className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
                         isActive
-                          ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                          : 'border-border/50 bg-card hover:border-orange-300 hover:bg-orange-50/50 dark:hover:bg-orange-900/10'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border/50 bg-card hover:border-primary/30 hover:bg-primary/5'
                       }`}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-black ${
                           isActive
-                            ? 'bg-orange-500 text-white'
+                            ? 'bg-primary text-primary-foreground'
                             : 'bg-muted text-muted-foreground'
                         }`}>
                           {index + 1}
@@ -435,32 +526,18 @@ const SEQQuizPage = () => {
         )}
       </AnimatePresence>
 
-      <div className="max-w-4xl mx-auto">
+      <main className="relative z-10 mx-auto flex w-full max-w-4xl flex-1 flex-col overflow-y-auto overscroll-contain">
+      <div className="pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-4"
+          className="border-b border-border/40 px-4 py-3 text-center sm:px-6"
         >
-          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500 mb-2 block">
+          <span className="mb-2 block text-[10px] font-black uppercase tracking-[0.3em] text-primary">
             Question {currentIndex + 1} of {allSEQs.length}
           </span>
-          <Progress value={((currentIndex + 1) / allSEQs.length) * 100} className="h-1 bg-orange-100 dark:bg-orange-900/30" />
+          <Progress value={((currentIndex + 1) / allSEQs.length) * 100} className="h-1 bg-primary/10" />
         </motion.div>
-
-        <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-md -mx-4 px-4 py-3 mb-4 pt-[env(safe-area-inset-top)]">
-          <div className="flex items-center justify-between">
-            <Badge variant="outline" className="bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800">
-              <BookOpen className="w-3 h-3 mr-1" />
-              SEQ Practice
-            </Badge>
-            {profile?.plan === 'free' && (
-              <Badge variant="outline" className="bg-amber-50 dark:bg-amber-900/20 text-amber-600 border-amber-200">
-                <Sparkles className="w-3 h-3 mr-1" />
-                Free Plan
-              </Badge>
-            )}
-          </div>
-        </div>
 
         <AnimatePresence mode="wait">
           {isEvaluating ? (
@@ -472,22 +549,16 @@ const SEQQuizPage = () => {
               transition={{ duration: 0.2 }}
               className="space-y-6"
             >
-              <Card className="border-2 border-orange-200 dark:border-orange-800 shadow-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-black uppercase italic text-foreground">
-                    Question
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-lg font-medium text-foreground leading-relaxed">
+              <section className="px-5 pt-6 sm:px-8">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-primary">Question {currentIndex + 1}</p>
+                  <p className="text-lg font-semibold leading-relaxed text-foreground sm:text-xl">
                     {currentSEQ.question}
                   </p>
-                </CardContent>
-              </Card>
+              </section>
               <div className="flex justify-center py-12">
                 <div className="text-center">
-                  <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto mb-4" />
-                  <p className="text-lg font-bold text-orange-600">AI is evaluating your answer...</p>
+                  <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
+                  <p className="text-lg font-bold text-primary">Checking your answer...</p>
                   <p className="text-sm text-muted-foreground mt-2">This may take a few seconds</p>
                 </div>
               </div>
@@ -501,57 +572,49 @@ const SEQQuizPage = () => {
               transition={{ duration: 0.3, ease: "easeOut" }}
               className="space-y-6"
             >
-              <Card className="border-2 border-orange-200 dark:border-orange-800 shadow-lg">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg font-black uppercase italic text-foreground">
-                    Question
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-lg font-medium text-foreground leading-relaxed">
+              <section className="px-5 pt-6 sm:px-8">
+                  <p className="mb-3 text-[11px] font-black uppercase tracking-[0.16em] text-primary">Question {currentIndex + 1}</p>
+                  <p className="text-lg font-semibold leading-relaxed text-foreground sm:text-xl">
                     {currentSEQ.question}
                   </p>
-                </CardContent>
-              </Card>
+              </section>
 
               {currentSEQ?.id && previousAnswers[currentSEQ.id] && (
-                <Card className="border-2 border-orange-200 dark:border-orange-800 bg-orange-50/50 dark:bg-orange-900/10">
-                  <CardHeader className="pb-2">
+                <section className="mx-5 border-t border-border/50 pt-5 sm:mx-8">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-black uppercase italic text-orange-600 flex items-center gap-2">
+                      <p className="flex items-center gap-2 text-sm font-black uppercase italic text-primary">
                         <Clock className="w-4 h-4" />
                         Previous Attempt
-                      </CardTitle>
+                      </p>
                       <Badge className={`${
                         previousAnswers[currentSEQ.id].satisfactionIndex >= 80 
                           ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : previousAnswers[currentSEQ.id].satisfactionIndex >= 50
-                          ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                          ? 'bg-primary/10 text-primary'
                           : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                       }`}>
                         {previousAnswers[currentSEQ.id].satisfactionIndex}% Match
                       </Badge>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-sm text-muted-foreground leading-relaxed bg-white dark:bg-zinc-900 rounded-lg p-3 border border-border">
+                  <div className="space-y-3 pt-3">
+                    <p className="text-sm leading-relaxed text-muted-foreground">
                       {previousAnswers[currentSEQ.id].userAnswer}
                     </p>
                     {previousAnswers[currentSEQ.id].correctedAnswer && (
                       <div>
                         <p className="text-xs font-bold text-muted-foreground mb-1">Suggested Improvement:</p>
-                        <p className="text-sm text-muted-foreground leading-relaxed bg-white/50 dark:bg-zinc-900/50 rounded-lg p-3 border border-border/50">
+                        <p className="text-sm leading-relaxed text-muted-foreground">
                           {previousAnswers[currentSEQ.id].correctedAnswer}
                         </p>
                       </div>
                     )}
-                  </CardContent>
-                </Card>
+                  </div>
+                </section>
               )}
 
-              <div className="space-y-2">
+              <div className="mx-5 space-y-2 pt-3 sm:mx-8">
                 <label className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-orange-500" />
+                  <Sparkles className="w-4 h-4 text-primary" />
                   {currentSEQ?.id && previousAnswers[currentSEQ.id] ? 'Update Your Answer' : 'Your Answer'}
                 </label>
                 <Textarea
@@ -559,12 +622,12 @@ const SEQQuizPage = () => {
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
                   placeholder="Write your answer here..."
-                  className="min-h-[200px] text-lg p-4 border-2 border-orange-200 dark:border-orange-800 focus:border-orange-500 focus:ring-orange-500"
+                  className="min-h-[160px] resize-none rounded-none border-0 border-b-2 border-border bg-transparent px-0 py-3 text-lg shadow-none focus-visible:border-primary focus-visible:ring-0"
                   disabled={isEvaluating}
                 />
               </div>
 
-              <div className="flex justify-end gap-4">
+              <div className="mx-5 flex justify-end gap-4 pb-8 sm:mx-8">
                 {currentSEQ?.id && previousAnswers[currentSEQ.id] && (
                   <Button
                     onClick={() => {
@@ -575,7 +638,7 @@ const SEQQuizPage = () => {
                       });
                     }}
                     variant="outline"
-                    className="border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
+                    className="border-primary/30 text-primary hover:bg-primary/5"
                   >
                     <CheckCircle className="w-4 h-4 mr-2" />
                     View Previous
@@ -584,7 +647,7 @@ const SEQQuizPage = () => {
                 <Button
                   onClick={handleSubmit}
                   disabled={!userAnswer.trim() || isEvaluating}
-                  className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 rounded-2xl h-14 px-8 font-black uppercase tracking-wider"
+                  className="h-12 rounded-xl bg-primary px-7 font-black uppercase tracking-wider text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
                 >
                   {isEvaluating ? (
                     <>
@@ -602,11 +665,11 @@ const SEQQuizPage = () => {
             </motion.div>
           ) : showEvaluatingSkeleton ? (
             <>
-              <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-md pt-[env(safe-area-inset-top)] -mx-3 sm:mx-0 px-3 sm:px-0">
+              <div className="mx-3 pt-4 sm:mx-6">
                 <div className="max-w-4xl mx-auto px-4 sm:px-0">
                   <div className="pt-4 pb-3">
                     <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground uppercase italic leading-none text-center">
-                      Your <span className="text-orange-500">Result</span>
+                      Your <span className="text-primary">Result</span>
                     </h2>
                     <p className="text-muted-foreground text-sm font-medium mt-2 max-w-lg mx-auto text-center">
                       AI is evaluating your answer...
@@ -627,11 +690,11 @@ const SEQQuizPage = () => {
             </>
           ) : showErrorModal ? (
             <>
-              <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-md pt-[env(safe-area-inset-top)] -mx-3 sm:mx-0 px-3 sm:px-0">
+              <div className="mx-3 pt-4 sm:mx-6">
                 <div className="max-w-4xl mx-auto px-4 sm:px-0">
                   <div className="pt-4 pb-3">
                     <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground uppercase italic leading-none text-center">
-                      Evaluation <span className="text-orange-500">Issue</span>
+                      Evaluation <span className="text-primary">Issue</span>
                     </h2>
                     <p className="text-muted-foreground text-sm font-medium mt-2 max-w-lg mx-auto text-center">
                       We couldn't evaluate your answer right now
@@ -671,21 +734,21 @@ const SEQQuizPage = () => {
                               textareaRef.current.focus();
                             }
                           }}
-                          className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black uppercase text-xs tracking-wider rounded-xl"
+                          className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-black uppercase text-xs tracking-wider rounded-xl"
                         >
                           Try Again
                         </Button>
                         <Button
                           variant="outline"
                           onClick={() => navigate('/dashboard')}
-                          className="flex-1 border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 font-bold rounded-xl"
+                          className="flex-1 border-primary/30 text-primary hover:bg-primary/5 font-bold rounded-xl"
                         >
                           Go to Dashboard
                         </Button>
                       </div>
                       <a 
                         href="mailto:hi@medmacs.app" 
-                        className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-orange-500 transition-colors"
+                        className="flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
                       >
                         <Mail className="w-4 h-4" />
                         Contact us: hi@medmacs.app
@@ -697,14 +760,14 @@ const SEQQuizPage = () => {
             </>
           ) : (
             <>
-              <div className="sticky top-0 z-50 bg-background/80 backdrop-blur-md pt-[env(safe-area-inset-top)] -mx-3 sm:mx-0 px-3 sm:px-0">
+              <div className="mx-3 pt-4 sm:mx-6">
                 <div className="max-w-4xl mx-auto px-4 sm:px-0">
                   <div className="pt-4 pb-3">
                     <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground uppercase italic leading-none text-center">
-                      Your <span className="text-orange-500">Result</span>
+                      Your <span className="text-primary">Result</span>
                     </h2>
                     <p className="text-muted-foreground text-sm font-medium mt-2 max-w-lg mx-auto text-center">
-                      AI has evaluated your answer based on book references
+                      Your answer is being evaluated against the reference answer
                     </p>
                   </div>
                 </div>
@@ -724,12 +787,8 @@ const SEQQuizPage = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
                 >
-                  <Card className={`border-2 shadow-lg ${
-                    result.is_correct 
-                      ? 'border-green-500 bg-green-50 dark:bg-green-900/10' 
-                      : 'border-red-500 bg-red-50 dark:bg-red-900/10'
-                  }`}>
-                <CardHeader className="pb-4">
+                  <section className="px-5 sm:px-8">
+                <div className="pb-4">
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="relative w-28 h-28 shrink-0">
                       <ResponsiveContainer width="100%" height="100%">
@@ -773,69 +832,41 @@ const SEQQuizPage = () => {
                         )}
                       </CardTitle>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Based on book references and AI analysis
+                        Evaluated against the reference answer
                       </p>
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                </div>
+                <div className="space-y-5 border-t border-border/50 pt-5">
                   <div>
                     <h4 className="text-sm font-bold text-foreground mb-2 flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-orange-500" />
-                      Your Answer (Corrected)
+                      <Sparkles className="w-4 h-4 text-primary" />
+                      Accurate Answer
                     </h4>
-                    <p className="text-muted-foreground leading-relaxed bg-white dark:bg-gray-900 rounded-lg p-3 border border-border">
+                    <p className="leading-relaxed text-muted-foreground">
                       {result.corrected_answer}
                     </p>
                   </div>
 
                   <div>
                     <h4 className="text-sm font-bold text-foreground mb-2 flex items-center gap-2">
-                      <Bot className="w-4 h-4 text-orange-500" />
-                      AI Explanation
+                      <Bot className="w-4 h-4 text-primary" />
+                      Evaluation Details
                     </h4>
-                    <p className="text-muted-foreground leading-relaxed bg-white dark:bg-gray-900 rounded-lg p-3 border border-border">
+                    <p className="leading-relaxed text-muted-foreground">
                       {result.explanation}
                     </p>
                   </div>
 
-                  {referenceResults.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground mb-2 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-orange-500" />
-                        Book References
-                      </h4>
-                      <div className="flex gap-3 overflow-x-auto pb-2">
-                        {referenceResults.map((ref: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="min-w-[240px] max-w-[240px] p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 shrink-0"
-                          >
-                            <div className="flex items-center gap-2 mb-1">
-                              <Badge variant="secondary" className="text-[10px] font-medium px-2 py-0.5 bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200">
-                                {ref.book || 'Reference'}
-                              </Badge>
-                              {ref.page && (
-                                <span className="text-[10px] text-muted-foreground ml-auto">p. {ref.page}</span>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-                              "{ref.content}"
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-                </Card>
+                </div>
+                </section>
                 </motion.div>
 
                 <motion.div
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.3 }}
-                  className="flex justify-end gap-4"
+                  className="mx-5 flex justify-end gap-4 sm:mx-8"
                 >
                   <Button
                     onClick={() => {
@@ -847,13 +878,13 @@ const SEQQuizPage = () => {
                       }
                     }}
                     variant="outline"
-                    className="border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
+                    className="border-primary/30 text-primary hover:bg-primary/5"
                   >
                     Try Again
                   </Button>
                   <Button
                     onClick={handleNext}
-                    className="bg-orange-500 hover:bg-orange-600 text-white shadow-lg rounded-2xl h-12 px-8 font-black uppercase tracking-wider"
+                    className="h-12 rounded-xl bg-primary px-8 font-black uppercase tracking-wider text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90"
                   >
                     {currentIndex + 1 < allSEQs.length ? 'Next Question' : 'Finish'}
                     <ArrowRight className="w-5 h-5 ml-2" />
@@ -864,7 +895,64 @@ const SEQQuizPage = () => {
           )}
         </AnimatePresence>
       </div>
-    </MCQPageLayout>
+      </main>
+
+      <AnimatePresence>
+        {showAiLocked && (
+          <motion.div
+            className="fixed inset-0 z-[200] flex items-end justify-center bg-black/55 p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:items-center"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowAiLocked(false)}
+          >
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="seq-ai-lock-title"
+              className="w-full max-w-md rounded-2xl bg-background p-6 shadow-2xl"
+              initial={{ y: 24, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 24, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Bot className="h-5 w-5" />
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowAiLocked(false)} className="h-10 w-10 rounded-xl" aria-label="Close Doctor AI access notice">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <h2 id="seq-ai-lock-title" className="mt-4 text-xl font-black tracking-tight text-foreground">Doctor AI is ready to help</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Ask for real-time guidance on this question with Doctor AI. This feature is available on Iconic and Premium plans.</p>
+              <Button onClick={() => navigate('/pricing')} className="mt-5 h-11 w-full rounded-xl bg-primary font-bold text-primary-foreground hover:bg-primary/90">
+                View plans
+              </Button>
+            </motion.section>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {currentSEQ && (
+        <Suspense fallback={null}>
+          <LazyAIChatbot
+            isOpen={isChatbotOpen}
+            onClose={() => setIsChatbotOpen(false)}
+            questionContext={currentSEQ.question}
+            explanationContext={currentSEQ.explanation || ''}
+            currentAnswer={userAnswer}
+            correctAnswer={result ? currentSEQ.model_answer : undefined}
+            userPlan={planTier}
+            isOnline={navigator.onLine}
+            prefillPrompt={chatPrefillPrompt}
+            onOpen={() => setIsChatbotOpen(true)}
+            onQuestionHelp={() => undefined}
+          />
+        </Suspense>
+      )}
+    </div>
   );
 };
 

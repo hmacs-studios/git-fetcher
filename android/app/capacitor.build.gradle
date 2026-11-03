@@ -18,6 +18,7 @@ dependencies {
     implementation project(':capacitor-status-bar')
     implementation project(':capgo-capacitor-navigation-bar')
     implementation project(':capgo-capacitor-updater')
+    implementation project(':revenuecat-purchases-capacitor')
 
 }
 

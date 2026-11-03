@@ -299,7 +299,7 @@ const PracticalPage = () => {
       </div>
 
       {/* Glass Navigation Header */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/20 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/20 pt-[env(safe-area-inset-top)]">
         <div className="container mx-auto px-4 lg:px-8 h-14 flex justify-between items-center max-w-7xl">
           <div className="flex items-center space-x-3">
             {level !== 'subjects' ? (
@@ -317,11 +317,8 @@ const PracticalPage = () => {
             <div className="flex min-w-0 items-center gap-2">
               <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs Logo" className="h-8 w-8 shrink-0 object-contain" />
               <div className="min-w-0 leading-none">
-                <p className="whitespace-nowrap font-['Syne'] text-[13px] font-extrabold tracking-[-0.035em]">
-                  <span className="text-primary">Medmacs</span><span className="text-foreground">.app</span>
-                </p>
-                <p className="mt-1 whitespace-nowrap text-[8px] font-bold leading-none tracking-[0.02em] text-muted-foreground">
-                  Viva & Practical Portal
+                <p className="whitespace-nowrap font-['Bricolage_Grotesque'] text-[13px] font-extrabold tracking-[-0.035em]">
+                  <span className="brand-wordmark text-lg text-foreground">Medmacs</span>
                 </p>
               </div>
             </div>

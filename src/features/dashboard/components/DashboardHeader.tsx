@@ -1,57 +1,80 @@
+import { useEffect, useState } from 'react';
 import { BellNavIcon } from '@/components/ui/TabIcons';
-import { Badge } from '@/components/ui/badge';
+import type { DashboardTabId } from '../types';
 
 type DashboardHeaderProps = {
-  displayName: string;
-  userPlanDisplayName: string;
-  cachedAvatarUrl?: string | null;
+  activeTab: DashboardTabId;
   unreadCount?: number;
   onOpenAnnouncements: () => void;
-  onOpenProfile?: () => void;
 };
 
 export function DashboardHeader({
-  displayName,
-  userPlanDisplayName,
-  cachedAvatarUrl,
+  activeTab,
   unreadCount = 0,
   onOpenAnnouncements,
-  onOpenProfile,
 }: DashboardHeaderProps) {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    setIsVisible(true);
+    const appRoot = document.getElementById('root');
+    const dashboardPage = document.querySelector<HTMLElement>('[data-dashboard-page]');
+    const getScrollY = () => Math.max(window.scrollY, appRoot?.scrollTop ?? 0, dashboardPage?.scrollTop ?? 0);
+    let lastScrollY = getScrollY();
+
+    const handleScroll = () => {
+      const scrollY = getScrollY();
+      if (scrollY < 64) {
+        setIsVisible(true);
+        lastScrollY = scrollY;
+        return;
+      }
+
+      const movement = scrollY - lastScrollY;
+      if (Math.abs(movement) < 8) return;
+      setIsVisible(movement < 0);
+      lastScrollY = scrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    appRoot?.addEventListener('scroll', handleScroll, { passive: true });
+    dashboardPage?.addEventListener('scroll', handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      appRoot?.removeEventListener('scroll', handleScroll);
+      dashboardPage?.removeEventListener('scroll', handleScroll);
+    };
+  }, [activeTab]);
+
   return (
-    <header className="fixed left-0 right-0 top-0 z-50 border-b border-border/20 bg-gradient-to-b from-background via-background to-background/95 pt-[env(safe-area-inset-top)] dark:from-background dark:via-background dark:to-background/95">
-      <div className="flex items-center justify-between px-5 h-14">
-        <div className="flex min-w-0 items-center gap-2">
-          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="" className="h-8 w-8 shrink-0 object-contain" />
-          <div className="min-w-0 leading-none">
-            <p className="whitespace-nowrap font-['Syne'] text-[13px] font-extrabold tracking-[-0.035em]">
-              <span className="text-primary">Medmacs</span><span className="text-foreground">.app</span>
-            </p>
-            <p className="mt-1 whitespace-nowrap text-[8px] font-bold leading-none tracking-[0.02em] text-muted-foreground">
-              By HMACS Studios
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge className="text-[10px] font-bold bg-primary/10 text-primary border-0 px-2.5">
-            {userPlanDisplayName}
-          </Badge>
+    <>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-x-0 top-0 z-40 bg-background"
+        style={{ height: 'env(safe-area-inset-top, 0px)' }}
+      />
+      <header
+        className={`fixed left-0 right-0 top-0 z-50 origin-top border-b border-border/20 bg-gradient-to-b from-background via-background to-background/95 pt-[env(safe-area-inset-top)] transform-gpu transition-[transform,opacity] duration-300 [transition-timing-function:cubic-bezier(.22,1,.36,1)] motion-reduce:transition-none dark:from-background dark:via-background dark:to-background/95 ${isVisible ? 'translate-y-0 rotate-x-0 opacity-100' : 'pointer-events-none -translate-y-3 [transform:perspective(700px)_rotateX(-78deg)_translateY(-12px)] opacity-0'}`}
+      >
+        <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-5">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="" className="h-9 w-9 rounded-lg object-contain" />
+          <span className="brand-wordmark text-xl text-foreground">Medmacs</span>
           <button
             type="button"
             onClick={onOpenAnnouncements}
             aria-label="Open announcements"
-            className="relative shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            className="relative flex h-11 w-11 items-center justify-center justify-self-end rounded-xl border border-border/60 bg-muted/70 text-foreground transition-colors hover:bg-muted"
           >
-            <BellNavIcon className="w-5 h-5" />
+            <BellNavIcon className="h-5 w-5" />
             {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
+              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
         </div>
-      </div>
-    </header>
+      </header>
+    </>
   );
 }
 

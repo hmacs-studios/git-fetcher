@@ -53,83 +53,16 @@ export function useFeatureAccess(
   overrideInstituteCode?: string | null,
   overridePlanTier?: string | null
 ): FeatureAccessResult {
-  const { user } = useAuth();
-
-  // 1. Fetch user profile from Cloud DB
-  const { data: userProfile, isLoading: isProfileLoading } = useQuery({
-    queryKey: ['feature-access-profile', user?.id],
-    queryFn: async () => {
-      if (!user?.id) return null;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('plan, institute')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error) return null;
-      return data;
-    },
-    enabled: !!user?.id && (!overrideInstituteCode || !overridePlanTier),
-    staleTime: 0, // Always fetch fresh profile from Cloud DB
-  });
-
-  const activePlan = overridePlanTier ?? userProfile?.plan ?? 'free';
-  const activeInstitute = overrideInstituteCode ?? userProfile?.institute ?? 'global';
-
-  const planTier = normalizePlanTier(activePlan);
-  const normalizedInstitute = String(activeInstitute || 'global').trim().toLowerCase();
-
-  // 2. Fetch access control matrix directly from Cloud DB (institute_plan_features)
-  const { data: featureMatrix, isLoading: isMatrixLoading } = useQuery({
-    queryKey: ['institute_plan_features', normalizedInstitute],
-    queryFn: async () => {
-      try {
-        const { data, error } = await (supabase.from('institute_plan_features') as any)
-          .select('institute_code, features')
-          .in('institute_code', [normalizedInstitute, 'global', 'all']);
-
-        if (error || !data || data.length === 0) return null;
-
-        // Custom institute override takes top priority
-        const customEntry = data.find((row: any) => String(row.institute_code).toLowerCase() === normalizedInstitute);
-        if (customEntry && customEntry.features) {
-          const parsed = parseFeatures(customEntry.features);
-          if (parsed) return parsed;
-        }
-
-        // Global default entry in Cloud DB
-        const globalEntry = data.find((row: any) => ['global', 'all'].includes(String(row.institute_code).toLowerCase()));
-        if (globalEntry && globalEntry.features) {
-          const parsed = parseFeatures(globalEntry.features);
-          if (parsed) return parsed;
-        }
-
-        return null;
-      } catch {
-        return null;
-      }
-    },
-    staleTime: 0, // Always fetch fresh permissions matrix from Cloud DB
-  });
-
-  const isLoading = (isProfileLoading && !overridePlanTier) || isMatrixLoading;
-  
-  // Single Source of Truth Evaluation from Cloud DB:
-  // While loading permissions, return false (locked).
-  // Once loaded, evaluate exact Cloud DB boolean flag.
-  const featureConfig = featureMatrix ? featureMatrix[featureKey] : null;
-
-  const isAccessible = isLoading
-    ? false
-    : featureConfig
-    ? featureConfig[planTier] !== false
-    : false; // Strict fallback: if Cloud DB matrix is missing/empty, default to locked!
+  const { features, isLoading, planTier, instituteCode } = useAllFeatureAccess(
+    overrideInstituteCode,
+    overridePlanTier,
+  );
 
   return {
-    isAccessible,
+    isAccessible: features[featureKey],
     isLoading,
     planTier,
-    instituteCode: normalizedInstitute
+    instituteCode,
   };
 }
 
@@ -138,8 +71,9 @@ export function useFeatureAccess(
  */
 export function useAllFeatureAccess(
   overrideInstituteCode?: string | null,
-  overridePlanTier?: string | null
-): { features: Record<FeatureKey, boolean>; isLoading: boolean; planTier: PlanTier } {
+  overridePlanTier?: string | null,
+  enabled = true,
+): { features: Record<FeatureKey, boolean>; isLoading: boolean; planTier: PlanTier; instituteCode: string } {
   const { user } = useAuth();
 
   const { data: userProfile, isLoading: isProfileLoading } = useQuery({
@@ -155,8 +89,8 @@ export function useAllFeatureAccess(
       if (error) return null;
       return data;
     },
-    enabled: !!user?.id && (!overrideInstituteCode || !overridePlanTier),
-    staleTime: 0,
+    enabled: enabled && !!user?.id && (!overrideInstituteCode || !overridePlanTier),
+    staleTime: 1000 * 60 * 5,
   });
 
   const activePlan = overridePlanTier ?? userProfile?.plan ?? 'free';
@@ -192,7 +126,8 @@ export function useAllFeatureAccess(
         return null;
       }
     },
-    staleTime: 0,
+    enabled,
+    staleTime: 1000 * 60 * 5,
   });
 
   const isLoading = (isProfileLoading && !overridePlanTier) || isMatrixLoading;
@@ -221,6 +156,7 @@ export function useAllFeatureAccess(
   return {
     features,
     isLoading,
-    planTier
+    planTier,
+    instituteCode: normalizedInstitute,
   };
 }

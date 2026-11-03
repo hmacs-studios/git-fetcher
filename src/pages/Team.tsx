@@ -1,8 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowLeft,
   ArrowRight,
   BookOpen,
   Crown,
@@ -10,7 +8,6 @@ import {
   Instagram,
   Linkedin,
   Sparkles,
-  UserRound,
   Users,
   Zap,
 } from 'lucide-react';
@@ -116,26 +113,6 @@ const titleizeCategory = (value: string) =>
 
 const normalizeIconKey = (value?: string | null) =>
   String(value || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-
-const fallbackMembers: TeamMember[] = [
-  {
-    name: 'Dr. Muhammad Ameer Hamza',
-    role: 'Founder',
-    category: 'core',
-    image_url: '/team/founders/hamza.png',
-    instagram_url: 'https://instagram.com/ameerhamza.exe',
-  },
-  {
-    name: 'Dua Ahmed',
-    role: 'Campus Ambassador - DMC',
-    category: 'campus_representatives',
-  },
-  {
-    name: 'Faiqa Ahmed',
-    role: 'Campus Ambassador - JSMU',
-    category: 'campus_representatives',
-  },
-];
 
 const medmacsLogo = '/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png';
 
@@ -255,7 +232,7 @@ const TeamSkeleton = () => (
 
 const Teams = () => {
   const [founderExpanded, setFounderExpanded] = useState(false);
-  const { data: teamMembers = [], isLoading } = useQuery<TeamMember[]>({
+  const { data: teamMembers = [], isLoading, isError } = useQuery<TeamMember[]>({
     queryKey: ['team_members'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -284,7 +261,10 @@ const Teams = () => {
     staleTime: 1000 * 60 * 10,
   });
 
-  const members = teamMembers.length ? teamMembers : fallbackMembers;
+  // Team data has one source of truth: the published rows in Supabase.
+  // Never display people from a local fallback when that source is empty or
+  // temporarily unavailable.
+  const members = teamMembers;
   const categories = useMemo<TeamCategoryMeta[]>(() => {
     const knownCategories = new Map(defaultCategories.map((category) => [category.id, category]));
 
@@ -332,7 +312,7 @@ const Teams = () => {
     <div className="fixed inset-0 overflow-hidden bg-background text-foreground">
       <Seo
         title="Our Team - Medmacs"
-        description="Meet the people building and supporting Medmacs App."
+        description="Meet the people building and supporting Medmacs."
         canonical="https://www.medmacs.app/teams"
       />
 
@@ -341,23 +321,10 @@ const Teams = () => {
       <div className="pointer-events-none absolute -right-24 top-80 h-80 w-80 rounded-full bg-violet-500/10 blur-3xl" />
 
       <header className="absolute inset-x-0 top-0 z-30 border-b border-border/60 bg-background/88 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+10px)] backdrop-blur-2xl">
-        <div className="mx-auto flex items-center justify-between gap-3 max-w-4xl">
-          <Link
-            to="/dashboard"
-            aria-label="Back to dashboard"
-            className="flex shrink-0 items-center justify-center bg-muted text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground h-11 w-11 rounded-2xl"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-
-          <div className="min-w-0 text-center">
-            <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-primary">Medmacs people</p>
-            <h1 className="truncate text-lg font-bold tracking-tight">The team behind the work</h1>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-center bg-primary/10 text-primary h-11 w-11 rounded-2xl">
-            <UserRound className="h-5 w-5" />
-          </div>
+        <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+          <img src={medmacsLogo} alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Teams</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 
@@ -375,6 +342,14 @@ const Teams = () => {
 
           {isLoading ? (
             <TeamSkeleton />
+          ) : isError || members.length === 0 ? (
+            <div className="rounded-3xl border border-border/60 bg-card/45 px-6 py-14 text-center backdrop-blur-sm">
+              <Users className="mx-auto h-8 w-8 text-muted-foreground/60" />
+              <h2 className="mt-4 text-lg font-bold text-foreground">Team details are being updated</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-muted-foreground">
+                Please check back soon.
+              </p>
+            </div>
           ) : (
             <div className="space-y-10">
               {founder && (
@@ -403,9 +378,9 @@ const Teams = () => {
                         >
                           <img src={getProfileImage(founder)} alt={founder.name || 'Founder and CEO'} className="h-full w-full object-cover" />
                         </button>
-                        <div className="mt-6 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Founder & CEO</div>
+                        <div className="brand-wordmark mt-6 text-xl text-foreground">Founder &amp; CEO</div>
                         <h2 className="mt-3 text-3xl font-black tracking-[-0.03em] text-foreground sm:text-4xl">{founder.name}</h2>
-                        <p className="mt-2 text-sm text-muted-foreground">{founder.institute || founder.role || 'Medmacs'}</p>
+                        <p className="mt-2 text-sm text-muted-foreground">{founder.institute || 'Medmacs'}</p>
                       </motion.div>
                     ) : (
                       <motion.div
@@ -426,9 +401,9 @@ const Teams = () => {
                             <img src={getProfileImage(founder)} alt={founder.name || 'Founder and CEO'} className="h-full w-full object-cover" />
                           </button>
                           <div className="min-w-0 pt-1">
-                            <div className="inline-flex rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Founder & CEO</div>
+                            <div className="brand-wordmark text-lg text-foreground">Founder &amp; CEO</div>
                             <h2 className="mt-3 text-2xl font-black tracking-[-0.03em] text-foreground sm:text-3xl">{founder.name}</h2>
-                            <p className="mt-1 text-sm text-muted-foreground">{founder.institute || founder.role || 'Medmacs'}</p>
+                            <p className="mt-1 text-sm text-muted-foreground">{founder.institute || 'Medmacs'}</p>
                           </div>
                         </div>
                       <button
@@ -441,12 +416,16 @@ const Teams = () => {
                       </button>
                         <div className="mt-5 w-full border-t border-border/40 pt-5">
                       <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Biography</p>
-                      <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
-                        {pageContent?.founder_biography || founder.biography || 'I am Dr. Muhammad Ameer Hamza, the founder of Medmacs. I created Medmacs to make medical learning more practical, focused, and accessible for students. I am building it around the way we actually study: with useful tools, clear explanations, and a community that keeps improving the experience together.'}
-                      </p>
-                      <div className="mt-4 flex items-center gap-2">
-                        <a
-                          href={pageContent?.founder_linkedin || 'https://www.linkedin.com/in/dr-ameerhamza/'}
+                      {(pageContent?.founder_biography || founder.biography) && (
+                        <p className="mt-2 max-w-2xl text-sm leading-7 text-muted-foreground">
+                          {pageContent?.founder_biography || founder.biography}
+                        </p>
+                      )}
+                      {(pageContent?.founder_linkedin || pageContent?.founder_instagram) && (
+                        <div className="mt-4 flex items-center gap-2">
+                        {pageContent?.founder_linkedin && (
+                          <a
+                          href={pageContent.founder_linkedin}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label="Dr. Ameer Hamza on LinkedIn"
@@ -454,8 +433,10 @@ const Teams = () => {
                         >
                           <Linkedin className="h-4 w-4" />
                         </a>
+                        )}
+                        {pageContent?.founder_instagram && (
                         <a
-                          href={pageContent?.founder_instagram || 'https://www.instagram.com/ameerhamza.exe/'}
+                          href={pageContent.founder_instagram}
                           target="_blank"
                           rel="noopener noreferrer"
                           aria-label="Dr. Ameer Hamza on Instagram"
@@ -463,7 +444,9 @@ const Teams = () => {
                         >
                           <Instagram className="h-4 w-4" />
                         </a>
+                        )}
                       </div>
+                      )}
                         </div>
                       </motion.div>
                     )}
@@ -561,7 +544,7 @@ const Teams = () => {
           </motion.section>
 
           <p className="pb-4 pt-12 text-center text-[10px] text-muted-foreground tracking-widest">
-            © 2026 Medmacs App • All rights reserved
+            © 2026 Medmacs • All rights reserved
           </p>
         </div>
       </main>

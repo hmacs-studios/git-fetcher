@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "medmacs-payments",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [{ "pattern": "payments.medmacs.app/*", "zone_name": "medmacs.app" }],
+  "vars": {
+    "APP_URL": "https://medmacs.app",
+    "EASYPAISA_SOAP_URL": "https://easypay.easypaisa.com.pk/easypay-service/PartnerBusinessService",
+    "EASYPAISA_STATUS_ORIGIN": "https://easypay.easypaisa.com.pk",
+    "PAYFAST_GATEWAY_URL": "https://ipg1.apps.net.pk/Ecommerce/api/Transaction/PostTransaction",
+    "PAYFAST_TOKEN_URL": "https://ipg1.apps.net.pk/Ecommerce/api/Transaction/GetAccessToken",
+    "PAYMENT_CONFIRMATION_CC": "ceo@hmacs.org",
+    "REVENUECAT_PROJECT_ID": "projb2560612",
+    "REVENUECAT_SDK_KEY": "goog_AkiiWNPcRyBeXBGPkMWSXgikWal",
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_GkYgPdKV2U51Dd6Wo3AeLQ_nuyW-PIH",
+    "SUPABASE_URL": "https://ssmmquedryomwxccaqqb.supabase.co"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": { "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 }
+  }
+}

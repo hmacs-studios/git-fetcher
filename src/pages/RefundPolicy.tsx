@@ -8,15 +8,15 @@ const RefundPolicy = () => {
 
 **Last updated:** June 12, 2025
 
-Thank you for choosing Medmacs.app. We want to ensure you have a rewarding experience while you explore, evaluate, and purchase our MBBS learning tools.
+Thank you for choosing Medmacs. We want to ensure you have a rewarding experience while you explore, evaluate, and purchase our MBBS learning tools.
 
-As with any shopping experience, there are terms and conditions that apply to transactions at Medmacs.app. By placing an order or making a purchase at Medmacs.app, you agree to the terms set forth below along with our Privacy Policy and Terms and Conditions.
+As with any shopping experience, there are terms and conditions that apply to transactions at Medmacs. By placing an order or making a purchase at Medmacs, you agree to the terms set forth below along with our Privacy Policy and Terms and Conditions.
 
 ---
 
 ## Standard Refund Terms
 
-We believe in the quality of our AI-integrated MCAT platform. However, we understand that sometimes a service may not be the right fit for your specific study style.
+We believe in the quality of our AI-integrated Medical platform. However, we understand that sometimes a service may not be the right fit for your specific study style.
 
 * **Digital Products:** Since our Service provides digital content and AI-generated insights that are accessible immediately upon purchase, we generally offer a **7-day money-back guarantee** if you have not significantly utilized the premium features.
 * **Usage Limits:** If more than 10% of the premium question bank has been accessed or more than 50 AI-generated tutor queries have been made, the service is considered "consumed," and a refund may not be issued.
@@ -67,27 +67,15 @@ If you have any questions about our Refund Policy, you can contact us:
     <div className="h-dvh w-full overflow-y-auto bg-background">
       <Seo
         title="Refund Policy"
-        description="Learn about the refund policy at Medmacs App, including refund eligibility, request steps, and processing timelines."
+        description="Learn about the refund policy at Medmacs, including refund eligibility, request steps, and processing timelines."
         canonical="https://medmacs.app/refund-policy"
       />
 
       <div className="sticky top-0 z-50 border-b border-border/60 bg-background/85 pt-[env(safe-area-inset-top)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            aria-label="Go back"
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          <div className="flex items-center gap-3">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs Logo" className="h-8 w-8 object-contain" />
-            <span className="text-lg font-bold text-foreground">Medmacs</span>
-          </div>
-
-          <div className="h-9 w-9" />
+        <div className="mx-auto grid h-14 max-w-5xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Refund Policy</h1>
+          <div aria-hidden="true" />
         </div>
       </div>
 

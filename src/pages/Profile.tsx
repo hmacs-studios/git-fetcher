@@ -21,6 +21,12 @@ import PageSkeleton from '@/components/skeletons/PageSkeleton';
 import { useAchievementData } from '@/components/profile/AchievementBadges';
 import { motion, type Variants } from 'framer-motion';
 import { getUsernameValidationError, isUsernameConflict, normalizeUsername } from '@/utils/username';
+import {
+    getEffectiveProgramCode,
+    getInstituteProgramYearOptions,
+    type StudyProgramCode,
+} from '@/utils/studyPrograms';
+import { getEffectivePlan } from '@/utils/subscription';
 
 const planStyles = {
     free: { gradient: 'from-slate-500 via-slate-600 to-slate-700', icon: Shield, accent: 'bg-slate-300' },
@@ -48,7 +54,12 @@ const Profile = () => {
     const navigate = useNavigate();
     const { user, loading: authLoading } = useAuth();
 
-    const [editableProfile, setEditableProfile] = useState({ full_name: '', username: '', year: '' });
+    const [editableProfile, setEditableProfile] = useState<{
+        full_name: string;
+        username: string;
+        year: string;
+        program_code: StudyProgramCode;
+    }>({ full_name: '', username: '', year: '', program_code: 'mbbs' });
     const [loadingUpdateProfile, setLoadingUpdateProfile] = useState(false);
     const [showStatsModal, setShowStatsModal] = useState(false);
     const [showStudyPathModal, setShowStudyPathModal] = useState(false);
@@ -58,8 +69,6 @@ const Profile = () => {
     const [verifyingStudyPathOtp, setVerifyingStudyPathOtp] = useState(false);
     const [institutes, setInstitutes] = useState<Institute[]>([]);
     const [copiedReferral, setCopiedReferral] = useState(false);
-    const validYears = ["1st", "2nd", "3rd", "4th", "5th"];
-
     const planColors = {
         'free': { light: 'bg-purple-100 text-purple-800 border-purple-300', dark: 'dark:bg-purple-900/30 dark:text-purple-200 dark:border-purple-700' },
         'premium': { light: 'bg-yellow-100 text-yellow-800 border-yellow-300', dark: 'dark:bg-yellow-900/30 dark:text-yellow-200 dark:border-yellow-700' },
@@ -72,7 +81,7 @@ const Profile = () => {
         queryKey: ['profile-page', user?.id],
         queryFn: async () => {
             if (!user?.id) return null;
-            const { data, error } = await supabase.from('profiles').select('id, full_name, username, email, avatar_url, plan, plan_expiry_date, role, year, institute, badges, referral_code, study_path_changed_at').eq('id', user.id).maybeSingle();
+            const { data, error } = await supabase.from('profiles').select('id, full_name, username, email, avatar_url, plan, plan_expiry_date, role, year, program_code, institute, badges, referral_code, study_path_changed_at').eq('id', user.id).maybeSingle();
             if (error && error.code !== 'PGRST116') throw new Error(error.message);
             return data;
         },
@@ -89,16 +98,17 @@ const Profile = () => {
             setEditableProfile({
                 full_name: profileData.full_name ?? user?.user_metadata?.full_name ?? '',
                 username: profileData.username ?? user?.user_metadata?.username ?? '',
-                year: profileData.year ?? ''
+                year: profileData.year ?? '',
+                program_code: getEffectiveProgramCode((profileData as any).program_code),
             });
         }
     }, [profileData]);
 
     const displayName = editableProfile.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
     const userEmail = profileData?.email || user?.email || 'N/A';
-    const rawUserPlan = profileData?.plan?.toLowerCase() || 'free';
+    const rawUserPlan = getEffectivePlan(profileData?.plan, profileData?.plan_expiry_date);
     const userPlanDisplayName = rawUserPlan.charAt(0).toUpperCase() + rawUserPlan.slice(1) + ' Plan';
-    const planExpiryDate = profileData?.plan_expiry_date;
+    const planExpiryDate = rawUserPlan === 'free' ? null : profileData?.plan_expiry_date;
     const style = planStyles[rawUserPlan] || planStyles.free;
     const PlanIcon = style.icon;
 
@@ -148,6 +158,7 @@ const Profile = () => {
                 id: user?.id, full_name: editableProfile.full_name.trim(),
                 username: normalizedUsername,
                 year: selectedSpecializedTest ? null : editableProfile.year.trim(),
+                program_code: selectedSpecializedTest ? null : editableProfile.program_code,
                 updated_at: new Date().toISOString()
             }, { onConflict: 'id' });
             if (error) throw error;
@@ -210,7 +221,7 @@ const Profile = () => {
 
     const openStudyPathChangeModal = () => {
         if (!canChangeStudyPath) {
-            toast.error(`You can request another institute or specialized test change after ${nextStudyPathChangeLabel}.`);
+            toast.error(`You can request another institute or Post Graduate Exam change after ${nextStudyPathChangeLabel}.`);
             return;
         }
         setStudyPathOtp('');
@@ -288,7 +299,7 @@ const Profile = () => {
 
     return (
         <div className="dashboard-modern-font relative flex h-[100dvh] w-full flex-col overflow-hidden bg-gradient-to-b from-background via-primary/[0.055] to-background text-foreground">
-            <Seo title="User Profile" description="Manage your Medmacs App profile" canonical="https://medmacs.app/profile" />
+            <Seo title="User Profile" description="Manage your Medmacs profile" canonical="https://medmacs.app/profile" />
 
             {/* Ambient orbs */}
             <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -299,15 +310,10 @@ const Profile = () => {
 
             {/* Fixed glass header */}
             <header className="fixed inset-x-0 top-0 z-50 border-b border-border/30 bg-background/75 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
-                <div className="mx-auto flex h-14 max-w-2xl items-center justify-between px-5">
-                    <Link to="/dashboard" className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground transition-colors hover:bg-muted">
-                        <ChevronLeft className="h-5 w-5" />
-                    </Link>
-                    <div className="flex items-center gap-2.5">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-6 w-6" />
-                        <span className="text-sm font-extrabold text-foreground tracking-tight">My Profile</span>
-                    </div>
-                    <div className="w-9" />
+                <div className="mx-auto grid h-14 max-w-2xl grid-cols-[1fr_auto_1fr] items-center px-5">
+                    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+                    <h1 className="brand-wordmark text-xl text-foreground">My Profile</h1>
+                    <div aria-hidden="true" />
                 </div>
             </header>
 
@@ -429,7 +435,7 @@ const Profile = () => {
                                         </div>
                                         <div>
                                             <Label htmlFor="institute" className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
-                                                <Building2 className="mr-1 inline h-3 w-3" /> {selectedSpecializedTest ? 'Specialized Test' : 'Institute'}
+                                                <Building2 className="mr-1 inline h-3 w-3" /> {selectedSpecializedTest ? 'Post Graduate Exam' : 'Institute'}
                                             </Label>
                                             <div className="mt-1.5 flex gap-2">
                                                 <Input id="institute" value={userInstituteName} disabled
@@ -473,13 +479,28 @@ const Profile = () => {
                                                 <Label htmlFor="year" className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground">
                                                     <GraduationCap className="mr-1 inline h-3 w-3" /> Year of Study *
                                                 </Label>
-                                                <Select value={editableProfile.year} onValueChange={(value) => setEditableProfile({ ...editableProfile, year: value })}>
+                                                <Select
+                                                    value={`${editableProfile.program_code}:${editableProfile.year}`}
+                                                    onValueChange={(value) => {
+                                                        const [nextProgram, nextYear] = value.split(':');
+                                                        setEditableProfile({
+                                                            ...editableProfile,
+                                                            program_code: getEffectiveProgramCode(nextProgram),
+                                                            year: nextYear,
+                                                        });
+                                                    }}
+                                                >
                                                     <SelectTrigger className="mt-1.5 h-11 rounded-xl border-border/40 bg-muted/20 text-foreground">
                                                         <SelectValue placeholder="Select your year" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {validYears.map((year) => (
-                                                            <SelectItem key={year} value={year}>{year} Year MBBS</SelectItem>
+                                                        {getInstituteProgramYearOptions(selectedInstitute).map((option) => (
+                                                            <SelectItem
+                                                                key={`${option.programCode}:${option.year}`}
+                                                                value={`${option.programCode}:${option.year}`}
+                                                            >
+                                                                {option.label}
+                                                            </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
@@ -582,7 +603,7 @@ const Profile = () => {
                     <DialogHeader>
                         <DialogTitle className="text-xl font-black">Verify Email</DialogTitle>
                         <DialogDescription>
-                            Institute or specialized test can be changed once per week. We will send a 6-digit code to {userEmail}.
+                            Institute or Post Graduate Exam can be changed once per week. We will send a 6-digit code to {userEmail}.
                         </DialogDescription>
                     </DialogHeader>
                     {!canChangeStudyPath && nextStudyPathChangeLabel ? (

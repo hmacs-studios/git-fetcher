@@ -52,6 +52,7 @@ interface AnswerWithMcq {
         id: string;
         name: string;
         year: string;
+        program_code: string | null;
         color: string | null;
       };
     };
@@ -61,6 +62,7 @@ interface AnswerWithMcq {
 interface UserProfile {
   plan: string | null;
   year: string | null;
+  program_code: string | null;
 }
 
 const DetailedAnalytics = () => {
@@ -83,13 +85,13 @@ const DetailedAnalytics = () => {
   const userYear = profileData?.year || null;
 
   const { data: analytics, isLoading } = useQuery<SubjectAnalytics[]>({
-    queryKey: ['detailed-analytics', user?.id, userYear],
+    queryKey: ['detailed-analytics', user?.id, profileData?.program_code, userYear],
     queryFn: async () => {
       if (!user?.id) return [];
 
       const { data: answersRaw, error } = await supabase
         .from('user_answers')
-        .select('is_correct, created_at, mcq_id, mcqs(id, chapter_id, chapters(id, name, subject_id, subjects(id, name, year, color)))')
+        .select('is_correct, created_at, mcq_id, mcqs(id, chapter_id, chapters(id, name, subject_id, subjects(id, name, year, program_code, color)))')
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
@@ -106,6 +108,7 @@ const DetailedAnalytics = () => {
         const chapter = mcq.chapters;
 
         if (userYear && subject.year && subject.year !== userYear) continue;
+        if ((subject.program_code || 'mbbs') !== (profileData?.program_code || 'mbbs')) continue;
 
         if (!subjectMap[subject.id]) {
           subjectMap[subject.id] = {

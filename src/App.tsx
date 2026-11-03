@@ -22,8 +22,10 @@ import OtaDiagnosticsPanel from '@/components/OtaDiagnosticsPanel';
 import DeviceActivityTracker from '@/components/auth/DeviceActivityTracker';
 import UpgradeAccountModal from '@/components/UpgradeAccountModal';
 import FeatureGate from '@/components/auth/FeatureGate';
+import ContentAvailabilityGate from '@/components/auth/ContentAvailabilityGate';
+import { initializeOtaUpdates } from '@/services/otaUpdateService';
 import { setOnAiLimitError, type AiApiError } from '@/utils/aiApi';
-
+import { initPlayBilling, syncPlayBillingUser, isPlayBillingSupported } from '@/services/playBillingService';
 type InstallStatePluginApi = {
   consumeFreshInstall: () => Promise<{ freshInstall: boolean }>;
 };
@@ -38,6 +40,9 @@ const MCQSubjectSelectionPage = lazy(() => import('@/pages/mcq/MCQSubjectSelecti
 const MCQChapterSelectionPage = lazy(() => import('@/pages/mcq/MCQChapterSelectionPage'));
 const MCQSettingsPage = lazy(() => import('@/pages/mcq/MCQSettingsPage'));
 const MCQQuizPage = lazy(() => import('@/pages/mcq/MCQQuizPage'));
+const PastPaperSubjectSelectionPage = lazy(() => import('@/pages/pastpapers/PastPaperSubjectSelectionPage'));
+const PastPaperChapterSelectionPage = lazy(() => import('@/pages/pastpapers/PastPaperChapterSelectionPage'));
+const PastPaperSettingsPage = lazy(() => import('@/pages/pastpapers/PastPaperSettingsPage'));
 const ChapterLocks = lazy(() => import('@/pages/admin/ChapterLocks'));
 const OtaUpdates = lazy(() => import('@/pages/admin/OtaUpdates'));
 const Battle = lazy(() => import('@/pages/Battle'));
@@ -183,6 +188,21 @@ const AchievementNotifierHandler = () => {
   );
 };
 
+const PlayBillingHandler = () => {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (!isPlayBillingSupported()) return;
+    initPlayBilling(user?.id).then((ok) => {
+      if (ok && user?.id) {
+        void syncPlayBillingUser(user.id);
+      }
+    });
+  }, [user?.id]);
+
+  return null;
+};
+
 const AiLimitHandler = () => {
   const [error, setError] = useState<AiApiError | null>(null);
 
@@ -201,6 +221,10 @@ const AiLimitHandler = () => {
 };
 
 function App() {
+  useEffect(() => {
+    void initializeOtaUpdates();
+  }, []);
+
   const [themeRestoreChecked, setThemeRestoreChecked] = useState(
     () => !Capacitor.isNativePlatform(),
   );
@@ -243,6 +267,7 @@ function App() {
         themes={['light', 'dark']}
       >
         <StatusBarHandler />
+        <PlayBillingHandler />
         <OtaUpdateScreen />
         <OtaDiagnosticsPanel />
 
@@ -264,10 +289,17 @@ function App() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/mcqs" element={<FeatureGate feature="mcqs"><MCQSubjectSelectionPage /></FeatureGate>} />
-                <Route path="/mcqs/chapter/:subjectId" element={<FeatureGate feature="mcqs"><MCQChapterSelectionPage /></FeatureGate>} />
-                <Route path="/mcqs/settings/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><MCQSettingsPage /></FeatureGate>} />
+                <Route path="/mcqs" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="mcqs"><MCQSubjectSelectionPage /></ContentAvailabilityGate></FeatureGate>} />
+                <Route path="/mcqs/chapter/:subjectId" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="mcqs"><MCQChapterSelectionPage /></ContentAvailabilityGate></FeatureGate>} />
+                <Route path="/mcqs/settings/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="mcqs"><MCQSettingsPage /></ContentAvailabilityGate></FeatureGate>} />
+                {/* The quiz performs its own chapter-access check. Do not put the
+                    asynchronous dashboard capability gate around an active quiz:
+                    a late capability refresh can otherwise unmount a successfully
+                    prepared session and redirect the learner to the dashboard. */}
                 <Route path="/mcqs/quiz/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><MCQQuizPage /></FeatureGate>} />
+                <Route path="/past-papers" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="past_papers"><PastPaperSubjectSelectionPage /></ContentAvailabilityGate></FeatureGate>} />
+                <Route path="/past-papers/chapter/:subjectId" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="past_papers"><PastPaperChapterSelectionPage /></ContentAvailabilityGate></FeatureGate>} />
+                <Route path="/past-papers/settings/:subjectId/:chapterId" element={<FeatureGate feature="mcqs"><ContentAvailabilityGate area="past_papers"><PastPaperSettingsPage /></ContentAvailabilityGate></FeatureGate>} />
                 <Route path="/medmacs-supers/chapter-locks" element={<ChapterLocks />} />
                 <Route path="/medmacs-supers/updates" element={<OtaUpdates />} />
                 <Route path="/battle" element={<FeatureGate feature="battle_mode"><Battle /></FeatureGate>} />
@@ -289,7 +321,7 @@ function App() {
                 <Route path="/test-completed" element={<TestCompletionPage />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/terms" element={<TermsAndConditions />} />
-                <Route path="/checkout" element={<Checkout />} />
+                <Route path="/checkout" element={<Navigate to="/pricing" replace />} />
                 <Route path="/welcome-new-user" element={<Setup />} />
                 <Route path="/all-set" element={<AllSetPage />} />
                 <Route path="/settings/username" element={<UsernamePage />} />

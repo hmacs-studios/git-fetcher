@@ -91,7 +91,7 @@ const Referrals = () => {
   if (!user) {
     return (
       <div className="dashboard-modern-font min-h-screen w-full bg-background">
-        <Seo title="Referrals" description="Invite friends and earn rewards on Medmacs App." canonical="https://medmacs.app/referrals" />
+        <Seo title="Referrals" description="Invite friends and earn rewards on Medmacs." canonical="https://medmacs.app/referrals" />
         <div className="flex min-h-screen items-center justify-center p-6">
           <div className="w-full max-w-sm text-center">
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
@@ -110,7 +110,7 @@ const Referrals = () => {
 
   return (
     <div className="dashboard-modern-font min-h-screen w-full bg-background" ref={mainRef}>
-      <Seo title="Referrals" description="Invite friends and earn rewards on Medmacs App." canonical="https://medmacs.app/referrals" />
+      <Seo title="Referrals" description="Invite friends and earn rewards on Medmacs." canonical="https://medmacs.app/referrals" />
 
       {/* Ambient orbs */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
@@ -121,17 +121,10 @@ const Referrals = () => {
 
       {/* Fixed glass header */}
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-border/30 bg-background/80 pt-[env(safe-area-inset-top)] backdrop-blur-2xl">
-        <div className="flex h-14 items-center justify-between px-5">
-          <Link to="/profile" className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60 text-muted-foreground transition-colors hover:bg-muted">
-            <ChevronLeft className="h-5 w-5" />
-          </Link>
-          <div className="flex items-center gap-2.5">
-            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-6 w-6" />
-            <span className="text-sm font-extrabold text-foreground tracking-tight">Referrals</span>
-          </div>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted/60">
-            <Gift className="h-4 w-4 text-primary" />
-          </div>
+        <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-5">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Referrals</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 

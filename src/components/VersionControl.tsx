@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { App } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
@@ -16,6 +17,12 @@ const VersionGuard = () => {
 
     useEffect(() => {
         const checkVersion = async () => {
+            // Version check is only applicable for native mobile apps (Android/iOS)
+            if (!Capacitor.isNativePlatform()) {
+                setChecking(false);
+                return;
+            }
+
             try {
                 const appInfo = await App.getInfo();
                 const nativeVersionCode = parseVersionCode(appInfo.build);

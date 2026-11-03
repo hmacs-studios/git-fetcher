@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.hmacs.medmacs',
-  appName: 'Medmacs App',
+  appName: 'Medmacs',
   webDir: 'dist',
   plugins: {
     // 🎯 ADDED: Capgo Capacitor Updater Configuration

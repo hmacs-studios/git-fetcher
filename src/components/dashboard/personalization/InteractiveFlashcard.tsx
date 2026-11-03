@@ -147,7 +147,7 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
   const progressPercent = Math.round(((currentIndex + 1) / totalCards) * 100);
 
   return (
-    <div className="relative w-full max-w-md mx-auto aspect-[3/4.4] max-h-[540px] select-none pt-6 pb-2 px-2" style={{ perspective: '1200px' }}>
+    <div className="relative w-full max-w-md mx-auto aspect-[3/4.4] max-h-[540px] select-none pt-6 pb-2 px-2" style={{ perspective: '1200px', WebkitPerspective: '1200px' }}>
       {/* Top Animated Progress Bar */}
       <div className="absolute top-1 inset-x-4 h-1.5 rounded-full bg-white/20 overflow-hidden z-30 backdrop-blur-md">
         <motion.div
@@ -184,16 +184,19 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
       <AnimatePresence mode="popLayout">
         <motion.div
           key={currentIndex}
-          style={{ x, rotate, opacity }}
-          drag="x"
-          dragConstraints={{ left: 0, right: 0 }}
-          onDragEnd={handleDragEnd}
           initial={{ scale: 0.92, opacity: 0, y: -16 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.92, opacity: 0, y: 16 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className={`relative z-20 w-full h-full rounded-[2.5rem] p-5 sm:p-7 flex flex-col justify-between ${theme.bg} ${theme.text} ${theme.shadow} shadow-2xl overflow-hidden font-rounded border border-white/20`}
+          className="absolute inset-x-2 bottom-2 top-6 z-20"
         >
+          <motion.div
+            style={{ x, rotate, opacity }}
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            onDragEnd={handleDragEnd}
+            className={`relative h-full w-full rounded-[2.5rem] p-5 sm:p-7 flex flex-col justify-between ${theme.bg} ${theme.text} ${theme.shadow} shadow-2xl overflow-hidden font-rounded border border-white/20`}
+          >
           {/* Background decorative glow */}
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-64 h-64 rounded-full bg-black/10 blur-3xl pointer-events-none" />
@@ -208,7 +211,7 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
                   className="h-6 w-6 object-contain drop-shadow-md"
                 />
                 <span className="text-xs font-black uppercase tracking-widest text-white/95 font-rounded drop-shadow-sm">
-                  Medmacs<span className="opacity-75 text-[10px]">.app</span>
+                  Medmacs
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -277,7 +280,7 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
               animate={{ rotateY: isFlipped ? 180 : 0 }}
               transition={{ duration: 0.45, ease: 'easeInOut' }}
               className="w-full h-full relative"
-              style={{ transformStyle: 'preserve-3d' }}
+              style={{ transformStyle: 'preserve-3d', WebkitTransformStyle: 'preserve-3d' }}
             >
               {/* Front Side */}
               <div
@@ -285,7 +288,6 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
                 style={{
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
-                  opacity: isFlipped ? 0 : 1,
                   pointerEvents: isFlipped ? 'none' : 'auto',
                 }}
               >
@@ -306,7 +308,7 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
                   backfaceVisibility: 'hidden',
                   WebkitBackfaceVisibility: 'hidden',
                   transform: 'rotateY(180deg)',
-                  opacity: isFlipped ? 1 : 0,
+                  WebkitTransform: 'rotateY(180deg)',
                   pointerEvents: isFlipped ? 'auto' : 'none',
                 }}
               >
@@ -402,6 +404,7 @@ export const InteractiveFlashcard: React.FC<InteractiveFlashcardProps> = ({
               </button>
             </div>
           </div>
+          </motion.div>
         </motion.div>
       </AnimatePresence>
     </div>

@@ -201,7 +201,7 @@ const fetchLatestChapterAnswers = async (
       RESUME_DEADLINE_MS,
       'Resume lookup timed out.',
     );
-    if (!compactResult.error) {
+    if (!compactResult.error && Array.isArray(compactResult.data) && compactResult.data.length > 0) {
       logMCQDiagnostic('resume_compact_complete', {
         chapterId,
         durationMs: Math.round(performance.now() - startedAt),

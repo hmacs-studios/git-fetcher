@@ -29,7 +29,7 @@ export const SignOutConfirmModal: React.FC<SignOutConfirmModalProps> = ({
             <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
           <SheetHeader className="text-center sm:text-center">
-            <SheetTitle className="text-xl font-bold font-syne text-foreground">
+            <SheetTitle className="text-xl font-bold font-['Bricolage_Grotesque'] text-foreground">
               Are you sure you want to log out?
             </SheetTitle>
             <SheetDescription className="text-sm text-muted-foreground mt-2 font-medium">

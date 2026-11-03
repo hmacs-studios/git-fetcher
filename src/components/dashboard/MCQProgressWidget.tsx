@@ -7,6 +7,29 @@ import { memo, useEffect, useMemo, useState } from 'react';
 import { MCQProgressSkeleton } from '../skeletons/MCQProgressSkeleton';
 import { isSubjectVisibleForInstitute } from '@/utils/subjectVisibility';
 
+const formatTimeAgo = (timestamp?: string | null): string => {
+  if (!timestamp) return 'recently';
+  const past = new Date(timestamp).getTime();
+  if (Number.isNaN(past)) return 'recently';
+  const diffSec = Math.floor((Date.now() - past) / 1000);
+  if (diffSec < 45) return 'just now';
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min ago`;
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays < 30) return `${diffDays}d ago`;
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `${diffMonths} mo ago`;
+
+  const diffYears = Math.floor(diffDays / 365);
+  return `${diffYears}y ago`;
+};
+
 // Defines the shape of the saved session per Subject/Chapter in localStorage
 export interface SavedMCQSession {
   subjectId: string;
@@ -34,12 +57,12 @@ const GET_SAVED_SESSIONS = async (userId: string): Promise<SavedMCQSession[]> =>
       .select('in_progress_mcqs')
       .eq('id', userId)
       .single();
-    
+
     if (error || !data?.in_progress_mcqs) {
       // Fallback to local storage if not found in db
       return localSessions;
     }
-    
+
     const cloudSessions = Array.isArray(data.in_progress_mcqs)
       ? data.in_progress_mcqs as unknown as SavedMCQSession[]
       : [];
@@ -52,7 +75,7 @@ const GET_SAVED_SESSIONS = async (userId: string): Promise<SavedMCQSession[]> =>
         if (!mergedByChapter.has(session.chapterId)) mergedByChapter.set(session.chapterId, session);
       });
 
-    return Array.from(mergedByChapter.values()).slice(0, 15);
+    return Array.from(mergedByChapter.values()).slice(0, 30);
   } catch {
     const localData = localStorage.getItem('mcq_saved_sessions');
     return localData ? JSON.parse(localData) : [];
@@ -66,45 +89,32 @@ const DonutChart3D = memo(({ percentage, colorClass, gradientId }: { percentage:
 
   return (
     <div className="relative w-24 h-24 flex items-center justify-center shrink-0">
-      {/* 3D Drop Shadow behind the SVG */}
-      <div className={`absolute inset-0 rounded-full blur-md opacity-40 ${colorClass.split(" ")[0]} translate-y-2`} />
-      
-      <svg className="w-full h-full transform -rotate-90 relative z-10 filter drop-shadow-xl" viewBox="0 0 100 100">
+      <svg className="w-full h-full transform -rotate-90 relative z-10 drop-shadow-md" viewBox="0 0 100 100">
         <defs>
           <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" className="stop-color-primary" stopColor="currentColor" />
             <stop offset="100%" className="stop-color-secondary" stopColor="white" stopOpacity="0.2" />
           </linearGradient>
-          {/* Inner shadow filter for 3D effect */}
-          <filter id="inner-shadow">
-            <feOffset dx="0" dy="2"/>
-            <feGaussianBlur stdDeviation="2" result="offset-blur"/>
-            <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse"/>
-            <feFlood floodColor="black" floodOpacity="0.4" result="color"/>
-            <feComposite operator="in" in="color" in2="inverse" result="shadow"/>
-            <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
-          </filter>
         </defs>
-        
+
         {/* Background Track */}
         <circle
           cx="50" cy="50" r={radius}
           fill="none"
           className="stroke-muted/30"
-          strokeWidth="12"
+          strokeWidth="10"
         />
-        
+
         {/* Progress Arc */}
         <circle
           cx="50" cy="50" r={radius}
           fill="none"
           className={colorClass}
-          strokeWidth="12"
+          strokeWidth="10"
           strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
-          filter="url(#inner-shadow)"
-          style={{ transition: 'stroke-dashoffset 1s ease-in-out' }}
+          style={{ transition: 'stroke-dashoffset 0.8s ease-out' }}
         />
       </svg>
       {/* Center text */}
@@ -133,7 +143,7 @@ export const MCQProgressWidget = () => {
       if (!userData?.id) return null;
       const { data } = await supabase
         .from('profiles')
-        .select('institute, year')
+        .select('institute, year, program_code')
         .eq('id', userData.id)
         .maybeSingle();
       return data;
@@ -152,7 +162,7 @@ export const MCQProgressWidget = () => {
   }, [userData?.id]);
 
   const { data: chaptersData, isLoading } = useQuery({
-    queryKey: ['mcq-progress-chapters', sessions.map(s => s.chapterId), userData?.id, profileData?.institute, profileData?.year],
+    queryKey: ['mcq-progress-chapters', sessions.map(s => s.chapterId), userData?.id, profileData?.institute, profileData?.program_code, profileData?.year],
     queryFn: async () => {
       if (sessions.length === 0) return [];
       const userInstitute = String(profileData?.institute || '').trim();
@@ -162,24 +172,19 @@ export const MCQProgressWidget = () => {
       const subjectIds = [...new Set(sessions.map(s => s.subjectId))];
 
       // Fetch chapter details for names and counts
-      const [chaptersResult, subjectsResult, mcqsResult] = await Promise.all([
+      const [chaptersResult, subjectsResult] = await Promise.all([
         supabase
           .from('chapters')
-          .select('id, name, subject_id, mcqs(count)')
+          .select('id, name, subject_id, mcq_count')
           .in('id', chapterIds),
         supabase
           .from('subjects')
-          .select('id, name, color, year, institutes')
+          .select('id, name, color, year, program_code, institutes')
           .in('id', subjectIds),
-        supabase
-          .from('mcqs')
-          .select('id, chapter_id')
-          .in('chapter_id', chapterIds),
       ]);
 
       const { data: chapters, error: chError } = chaptersResult;
       const { data: subjects, error: subError } = subjectsResult;
-      const allMCQs = mcqsResult.data || [];
 
       if (chError || subError) return [];
 
@@ -187,26 +192,35 @@ export const MCQProgressWidget = () => {
         'get_mcq_resume_snapshots',
         { p_chapter_ids: chapterIds },
       );
-      let attemptedIds = (resumeSnapshots || [])
-        .flatMap(snapshot => snapshot.attempted_mcq_ids || []);
-      if ((resumeError || attemptedIds.length === 0) && allMCQs.length > 0) {
-        const { data: compatibilityAnswers } = await supabase
-          .from('user_answers')
-          .select('mcq_id')
+
+      // Create a lookup for snapshots by chapter_id
+      const snapshotMap = new Map<string, { attempted_count: number; last_mcq_id: string | null; attempted_mcq_ids: string[] }>();
+      (resumeSnapshots || []).forEach(snap => {
+        if (snap?.chapter_id) {
+          snapshotMap.set(snap.chapter_id, {
+            attempted_count: Number(snap.attempted_count) || 0,
+            last_mcq_id: snap.last_mcq_id,
+            attempted_mcq_ids: Array.isArray(snap.attempted_mcq_ids) ? snap.attempted_mcq_ids : [],
+          });
+        }
+      });
+
+      // Fallback query if resume snapshots RPC fails
+      let fallbackAttemptedCountMap = new Map<string, number>();
+      if (resumeError) {
+        const { data: userAnswersData } = await supabase
+          .from('user_chapter_mcq_state')
+          .select('chapter_id, attempted_count')
           .eq('user_id', userData?.id)
-          .in('mcq_id', allMCQs.map(mcq => mcq.id));
-        attemptedIds = compatibilityAnswers?.map(answer => answer.mcq_id) || [];
+          .in('chapter_id', chapterIds);
+
+        (userAnswersData || []).forEach(row => {
+          fallbackAttemptedCountMap.set(row.chapter_id, Number(row.attempted_count) || 0);
+        });
       }
-      const answeredSet = new Set(attemptedIds);
+
       const chaptersById = new Map(chapters?.map(chapter => [chapter.id, chapter]) || []);
       const subjectsById = new Map(subjects?.map(subject => [subject.id, subject]) || []);
-      const mcqsByChapter = new Map<string, typeof allMCQs>();
-
-      allMCQs.forEach((mcq) => {
-        const existing = mcqsByChapter.get(mcq.chapter_id) || [];
-        existing.push(mcq);
-        mcqsByChapter.set(mcq.chapter_id, existing);
-      });
 
       return sessions.map(session => {
         const chapter = chaptersById.get(session.chapterId);
@@ -214,24 +228,34 @@ export const MCQProgressWidget = () => {
         if (!chapter || !subject) return null;
 
         const subjectYear = String(subject.year || '').trim();
+        // A null subject programme is intentionally used for shared/legacy and
+        // specialised-test content. It must not be interpreted as MBBS, or a
+        // saved FCPS session disappears as soon as this dashboard is opened.
+        const subjectProgram = String(subject.program_code || '').trim().toLowerCase();
+        const userProgram = String(profileData?.program_code || 'mbbs').trim().toLowerCase();
         const visibleForInstitute = isSubjectVisibleForInstitute(subject, userInstitute);
         const visibleForYear = !userYear || !subjectYear || subjectYear === userYear;
-        if (!visibleForInstitute || !visibleForYear) return null;
+        const visibleForProgram = !subjectProgram || subjectProgram === userProgram;
+        if (!visibleForInstitute || !visibleForYear || !visibleForProgram) return null;
 
-        // Count completed MCQs for this chapter
-        const chapterMCQs = mcqsByChapter.get(session.chapterId) || [];
-        const totalMCQs = chapterMCQs.length || chapter?.mcqs?.[0]?.count || 1;
-        const completedMCQs = chapterMCQs.filter(m => answeredSet.has(m.id)).length;
+        // Total MCQs in chapter
+        const totalMCQs = Math.max(Number(chapter?.mcq_count) || 0, 1);
 
-        // Find first unattempted MCQ index
-        let resumeIndex = 0;
-        for (let i = 0; i < chapterMCQs.length; i++) {
-          if (!answeredSet.has(chapterMCQs[i].id)) {
-            resumeIndex = i;
-            break;
-          }
-          resumeIndex = i + 1;
-        }
+        // Accurate completed MCQs count from DB snapshot or session
+        const snapshot = snapshotMap.get(session.chapterId);
+        const snapshotCount = snapshot ? snapshot.attempted_count : (fallbackAttemptedCountMap.get(session.chapterId) ?? 0);
+        
+        // Take the highest reliable count between DB state and local session index
+        const completedMCQs = Math.min(
+          Math.max(snapshotCount, (Number(session.lastIndex) || 0) + 1),
+          totalMCQs
+        );
+
+        // Resume at next question index
+        const resumeIndex = Math.min(
+          Math.max(Number(session.lastIndex) || 0, snapshotCount),
+          Math.max(totalMCQs - 1, 0)
+        );
 
         const percentage = totalMCQs > 0 ? Math.min((completedMCQs / totalMCQs) * 100, 100) : 0;
 
@@ -247,29 +271,29 @@ export const MCQProgressWidget = () => {
         };
       }).filter((s): s is NonNullable<typeof s> => Boolean(s))
         .filter(s => s.completedMCQs < s.totalMCQs) // Show incomplete sessions
-        .slice(0, 5); // Display 5 items in Dashboard
+        .slice(0, 30); // Display up to 30 active incomplete sessions in Dashboard
     },
     enabled: sessions.length > 0 && !!userData?.id && !profileLoading,
     staleTime: 1000 * 60 * 5,
   });
 
   const gradients = useMemo(() => [
-    { text: 'text-rose-500 stroke-rose-500', bg: 'from-rose-500/10 to-pink-500/5', icon: 'text-rose-500' },
-    { text: 'text-blue-500 stroke-blue-500', bg: 'from-blue-500/10 to-indigo-500/5', icon: 'text-blue-500' },
-    { text: 'text-emerald-500 stroke-emerald-500', bg: 'from-emerald-500/10 to-teal-500/5', icon: 'text-emerald-500' },
-    { text: 'text-amber-500 stroke-amber-500', bg: 'from-amber-500/10 to-orange-500/5', icon: 'text-amber-500' },
-    { text: 'text-violet-500 stroke-violet-500', bg: 'from-violet-500/10 to-purple-500/5', icon: 'text-violet-500' },
+    { text: 'text-rose-500 stroke-rose-500', bg: 'from-rose-500/10 to-pink-500/5', icon: 'text-rose-500', border: 'border-rose-500/30' },
+    { text: 'text-blue-500 stroke-blue-500', bg: 'from-blue-500/10 to-indigo-500/5', icon: 'text-blue-500', border: 'border-blue-500/30' },
+    { text: 'text-emerald-500 stroke-emerald-500', bg: 'from-emerald-500/10 to-teal-500/5', icon: 'text-emerald-500', border: 'border-emerald-500/30' },
+    { text: 'text-amber-500 stroke-amber-500', bg: 'from-amber-500/10 to-orange-500/5', icon: 'text-amber-500', border: 'border-amber-500/30' },
+    { text: 'text-violet-500 stroke-violet-500', bg: 'from-violet-500/10 to-purple-500/5', icon: 'text-violet-500', border: 'border-violet-500/30' },
   ], []);
 
   if (isLoading) return <MCQProgressSkeleton />;
   if (!chaptersData || chaptersData.length === 0) return null;
 
   const handleResume = (session: MCQProgressSession) => {
-    navigate(`/mcqs/quiz/${session.subjectId}/${session.chapterId}`, { 
-      state: { 
-        autoResume: true, 
-        startIndex: session.resumeIndex 
-      } 
+    navigate(`/mcqs/quiz/${session.subjectId}/${session.chapterId}`, {
+      state: {
+        autoResume: true,
+        startIndex: session.resumeIndex
+      }
     });
   };
 
@@ -279,12 +303,12 @@ export const MCQProgressWidget = () => {
         <Clock className="w-4 h-4 text-orange-500" />
         <h2 className="text-sm font-bold text-foreground">Pick up where you left off</h2>
       </div>
-      
+
       {/* Horizontally scrollable container */}
       <div className="flex gap-3 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide -mx-5 px-5" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {chaptersData.map((item, index) => {
           const visualStyle = gradients[index % gradients.length];
-          const timeAgo = item.timestamp ? new Date(item.timestamp).toLocaleDateString() : 'Recently';
+          const timeAgo = formatTimeAgo(item.timestamp);
 
           return (
             <motion.div
@@ -293,27 +317,32 @@ export const MCQProgressWidget = () => {
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: index * 0.1 }}
               onClick={() => handleResume(item)}
-              className={`relative flex items-center justify-between gap-4 p-4 rounded-[1.8rem] bg-gradient-to-br ${visualStyle.bg} border border-border/40 backdrop-blur-md shadow-lg shrink-0 w-[280px] snap-center cursor-pointer active:scale-[0.98] transition-transform`}
+              className={`relative flex items-center justify-between gap-4 p-4 rounded-[1.8rem] bg-gradient-to-br ${visualStyle.bg} border border-border/40 bg-card/90 shadow-md shrink-0 w-[280px] snap-center cursor-pointer active:scale-[0.98] transition-transform will-change-transform`}
             >
               <div className="flex-1 min-w-0">
-                <p className={`text-[10px] font-bold uppercase tracking-widest ${visualStyle.icon} mb-1.5 line-clamp-1`}>
+                <p className={`text-[10px] font-bold uppercase tracking-widest ${visualStyle.icon} truncate mb-1.5`}>
                   {item.subjectName}
                 </p>
                 <h3 className="text-sm font-black text-foreground line-clamp-2 leading-tight mb-2">
                   {item.chapterName}
                 </h3>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-muted-foreground bg-background/50 px-2 py-0.5 rounded-full">
-                    {item.completedMCQs} / {item.totalMCQs} completed
+                <div className="flex flex-col gap-1">
+                  <div>
+                    <span className={`text-xs font-semibold text-muted-foreground bg-background/50 border ${visualStyle.border} px-2 py-0.5 rounded-full whitespace-nowrap`}>
+                      {item.completedMCQs} / {item.totalMCQs} completed
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-medium text-muted-foreground/75 px-0.5">
+                    {timeAgo}
                   </span>
                 </div>
               </div>
 
               <div className="relative">
-                <DonutChart3D 
-                  percentage={item.percentage} 
+                <DonutChart3D
+                  percentage={item.percentage}
                   colorClass={visualStyle.text}
-                  gradientId={`grad-${index}`} 
+                  gradientId={`grad-${index}`}
                 />
                 <div className={`absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-background border border-border flex items-center justify-center shadow-lg`}>
                   <Play className={`w-3 h-3 ${visualStyle.icon} ml-0.5`} />

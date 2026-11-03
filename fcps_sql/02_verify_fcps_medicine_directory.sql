@@ -11,9 +11,9 @@ begin
   where s.year = 'medicine_allied'
     and s.institutes = to_jsonb(array['fcps_part_1']::text[]);
 
-  if v_subject_count <> 12 or v_chapter_count <> 117 then
+  if v_subject_count <> 13 or v_chapter_count <> 117 then
     raise exception
-      'FCPS Medicine & Allied verification failed: subjects=%, chapters=% (expected 12/117)',
+      'FCPS Medicine & Allied verification failed: subjects=%, chapters=% (expected 13/117)',
       v_subject_count,
       v_chapter_count;
   end if;

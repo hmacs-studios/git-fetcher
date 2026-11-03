@@ -81,7 +81,7 @@ const ForgotPassword = () => {
     <div className="fixed inset-0 flex flex-col overflow-hidden overscroll-none bg-gradient-to-br from-[#0a2e2e] via-[#0f172a] to-[#020617]">
       <Seo
         title="Forgot Password"
-        description="Reset your password for Medmacs App. Enter your email to receive instructions on how to regain access to your account."
+        description="Reset your password for Medmacs. Enter your email to receive instructions on how to regain access to your account."
         canonical="https://medmacs.app/forgot-password"
       />
 
@@ -103,7 +103,7 @@ const ForgotPassword = () => {
         </Link>
          <div className="flex items-center space-x-2">
            <img src="/assets/brand/medmacs-logo.png" alt="Medmacs" className="h-9 w-9 object-contain" onError={(event) => { event.currentTarget.src = "/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png"; }} />
-          <span className="text-white font-bold text-lg tracking-tight">Medmacs</span>
+          <span className="brand-wordmark text-xl text-white">Medmacs</span>
         </div>
       </div>
 

@@ -62,6 +62,7 @@ const OtaUpdateScreen = () => {
     return () => window.clearInterval(interval);
   }, [state.phase]);
 
+  const isChecking = state.phase === 'checking';
   const isAvailable = state.phase === 'available';
   const isDownloading = state.phase === 'downloading';
   const isPreparing = state.phase === 'preparing';
@@ -102,6 +103,12 @@ const OtaUpdateScreen = () => {
 
   return (
     <>
+      {isChecking && (
+        <div role="status" aria-live="polite" className="fixed inset-0 z-[10000] flex flex-col items-center justify-center gap-4 bg-background text-foreground">
+          <img src="/icon.svg" alt="" className="h-24 w-24 object-contain" />
+          <p className="text-sm font-semibold text-muted-foreground">Checking for app updates...</p>
+        </div>
+      )}
       {/* ── Bottom-pinned update prompt ── */}
       {isAvailable && (
         <div className="fixed inset-0 z-[10000] flex items-end justify-center">
@@ -121,8 +128,11 @@ const OtaUpdateScreen = () => {
                 <Download className="h-7 w-7" />
               </div>
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Medmacs</p>
-              <h2 className="mt-1 text-2xl font-extrabold tracking-tight brand-syne">
-                {isMandatory ? 'Update Required' : 'Update Available'}
+              <h2 className="mt-1 text-2xl font-extrabold tracking-tight brand-display">
+                Update{' '}
+                <span className="text-primary">
+                  {isMandatory ? 'Required' : 'Available'}
+                </span>
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 {isMandatory
@@ -194,9 +204,9 @@ const OtaUpdateScreen = () => {
       {(isActive || canContinue) && (
         <div className="fixed inset-0 z-[10000] overflow-hidden bg-white text-slate-950">
           <div className="mx-auto flex h-full w-full max-w-md flex-col px-5 pb-[max(18px,env(safe-area-inset-bottom))] pt-[max(18px,env(safe-area-inset-top))]">
-            <header className="flex items-center gap-2.5 font-['Syne'] text-lg font-extrabold tracking-[-.045em]">
+            <header className="flex items-center gap-2.5 font-['Bricolage_Grotesque'] text-lg font-extrabold tracking-[-.045em]">
               <img src="/favicon.png" alt="" className="h-8 w-8 rounded-lg object-contain" />
-              <span className="bg-gradient-to-r from-primary to-cyan-500 bg-clip-text text-transparent">Medmacs</span>
+              <span className="brand-wordmark text-xl text-foreground">Medmacs</span>
             </header>
 
             <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-2 text-center">
@@ -236,7 +246,7 @@ const OtaUpdateScreen = () => {
                     animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                     exit={reduceMotion ? undefined : { opacity: 0, y: -12, filter: 'blur(5px)' }}
                     transition={{ duration: reduceMotion ? 0 : 0.42, ease: [0.22, 1, 0.36, 1] }}
-                    className="font-['Syne'] text-[clamp(1.75rem,7vw,2.3rem)] font-extrabold leading-[1.05] tracking-[-.05em]"
+                    className="font-['Bricolage_Grotesque'] text-[clamp(1.75rem,7vw,2.3rem)] font-extrabold leading-[1.05] tracking-[-.05em]"
                   >
                     {displayMessage}
                   </motion.h1>

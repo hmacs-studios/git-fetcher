@@ -120,11 +120,13 @@ export const fetchCloudContent = async <T>(
         const serverUserScope = response.headers.get('X-User-Scope');
         if (serverUserScope) {
           const storedScope = getStoredScopeKey();
-          if (storedScope && storedScope !== serverUserScope) {
+          // Server sends resolvedContentInstitute:program:year (e.g. "kemu:mbbs:1st" or "smbb:mbbs:1st")
+          // If storedScope is user_id:institute:program:year, check the institute:program:year suffix
+          const storedSuffix = storedScope.includes(':') ? storedScope.substring(storedScope.indexOf(':') + 1) : storedScope;
+          if (storedScope && storedScope !== serverUserScope && storedSuffix !== serverUserScope) {
             console.log(`[fetchCloudContent] ETag Scope change detected (${storedScope} -> ${serverUserScope}). Invalidating all caches.`);
             clearCachedMCQDataSync();
           }
-          setStoredScopeKey(serverUserScope);
         }
 
         const json = await response.json();

@@ -16,6 +16,7 @@ import Seo from "@/components/Seo";
 import { motion } from "framer-motion";
 import GoogleSignin from "@/components/GoogleSignin";
 import type { LucideIcon } from "lucide-react";
+import { AuthDnaWave } from "@/components/auth/AuthDnaWave";
 
 type SignupFormData = {
   email: string;
@@ -394,7 +395,7 @@ const Signup = () => {
 
       <Seo
         title="Sign Up"
-        description="Create a free account on Medmacs App."
+        description="Create a free account on Medmacs."
         canonical="https://medmacs.app/signup"
       />
 
@@ -508,15 +509,14 @@ const Signup = () => {
         >
 
           <div className="text-center mb-6 flex flex-col items-center justify-center">
-            <h1 className="whitespace-nowrap font-['Syne'] text-[clamp(2rem,8vw,2.55rem)] font-extrabold tracking-[-.055em] flex items-center justify-center">
+            <h1 className="whitespace-nowrap font-['Bricolage_Grotesque'] text-[clamp(2rem,8vw,2.55rem)] font-extrabold tracking-[-.055em] flex items-center justify-center">
               <motion.span
-                className="inline-block bg-[linear-gradient(90deg,#2dd4bf,#0ea5e9,#22d3ee,#2dd4bf)] bg-[length:220%_100%] bg-clip-text text-transparent"
+                className="brand-wordmark inline-block text-slate-950"
                 animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                 transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
               >
                 Medmacs
               </motion.span>
-              <span className="text-slate-950">.app</span>
             </h1>
 
             <p className="mt-2 text-sm font-bold uppercase tracking-widest text-slate-400 text-center">
@@ -625,6 +625,7 @@ const Signup = () => {
           </div>
         </motion.div>
       </div>
+      <AuthDnaWave />
        <p className="relative z-10 border-t border-slate-200/60 bg-white/30 pb-[max(8px,env(safe-area-inset-bottom))] pt-3 text-center text-xs text-slate-400">
         A project by <span className="font-semibold text-slate-600">HMACS Studios</span>
       </p>

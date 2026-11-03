@@ -179,7 +179,7 @@ export const AITestGenerator: React.FC = () => {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="font-bold">Topic</Label>
-              <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Enter MCAT topic..." className="rounded-xl" />
+              <Input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Enter Medical topic..." className="rounded-xl" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

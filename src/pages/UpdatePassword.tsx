@@ -144,7 +144,7 @@ const UpdatePassword = () => {
       <div className="w-full max-w-md space-y-6 animate-fade-in">
         <div className="text-center">
           <img src="/assets/brand/medmacs-logo.png" alt="Medmacs" className="mx-auto mb-6 h-14 w-14 object-contain" onError={(event) => { event.currentTarget.src = "/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png"; }} />
-          <h1 className="font-['Syne'] text-3xl font-extrabold tracking-tight text-gray-900">Set New Password</h1>
+          <h1 className="font-['Bricolage_Grotesque'] text-3xl font-extrabold tracking-tight text-gray-900">Set New Password</h1>
           <p className="mt-2 text-gray-600">Enter and confirm your new password below.</p>
         </div>
 

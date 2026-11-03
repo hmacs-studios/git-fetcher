@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
+import { useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +9,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { CONTACT_DETAILS } from '@/constants/contact';
 import {
-    Mail, Phone, Instagram, Facebook, Linkedin, User, MessageSquare,
-    Loader2, CheckCircle, Send, ArrowLeft
+    Mail, Phone, Instagram, Facebook, Linkedin,
+    Loader2, CheckCircle, Send, ArrowLeft, FlaskConical
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { fetchInstitutes, getInstituteByCode, getInstituteDisplayName, isSpecializedTestInstitute } from '@/utils/institutes';
@@ -25,12 +25,9 @@ const ContactUsPage = () => {
     type ContactFormErrors = Partial<Record<keyof ContactFormData, string>>;
 
     const { user } = useAuth();
-    const headerRef = useRef<HTMLDivElement>(null);
-    const lastScrollY = useRef(0);
-    const [headerVisible, setHeaderVisible] = useState(true);
-
     const [searchParams] = useSearchParams();
     const isCampusCollaboration = searchParams.get('subject') === 'campus-collaboration';
+    const isSeqBetaFeedback = searchParams.get('subject') === 'seq-beta-feedback';
     const [formData, setFormData] = useState({ fullName: '', email: '', message: '' });
     const [formErrors, setFormErrors] = useState<ContactFormErrors>({});
     const [showSuccessMessage, setShowSuccessMessage] = useState(false);
@@ -53,25 +50,21 @@ const ContactUsPage = () => {
         staleTime: Infinity,
     });
 
-    useEffect(() => {
-        const handleScroll = () => {
-            const currentScrollY = window.scrollY;
-            setHeaderVisible(currentScrollY < lastScrollY.current || currentScrollY < 10);
-            lastScrollY.current = currentScrollY;
-        };
-        window.addEventListener('scroll', handleScroll, { passive: true });
-        return () => window.removeEventListener('scroll', handleScroll);
-    }, []);
-
     const userInstituteCode = (profile as any)?.institute || '';
     const userInstituteName = getInstituteDisplayName(userInstituteCode, institutes || []);
     const selectedInstitute = getInstituteByCode(userInstituteCode, institutes || []);
     const selectedSpecializedTest = isSpecializedTestInstitute(selectedInstitute);
     const campusCollaborationMessage = selectedSpecializedTest
-        ? `Hi Medmacs team, I'm preparing for ${userInstituteName}. Please share how specialized test content can be added or improved.`
+        ? `Hi Medmacs team, I'm preparing for ${userInstituteName}. Please share how Post Graduate Exam content can be added or improved.`
         : userInstituteName
             ? `Hi Medmacs team, I'm interested in bringing Medmacs to my campus/institute (${userInstituteName}). Please share more details about campus collaboration.`
             : "Hi Medmacs team, I'm interested in bringing Medmacs to my campus/institute. Please share more details about campus collaboration.";
+    const seqBetaFeedbackMessage = "Hi Medmacs team, I'd like to report an issue with Short Questions (beta).\n\nWhat happened:\n\nWhat I expected to happen:\n\nQuestion/chapter (if applicable):";
+    const contextualMessage = isCampusCollaboration
+        ? campusCollaborationMessage
+        : isSeqBetaFeedback
+            ? seqBetaFeedbackMessage
+            : '';
 
     useEffect(() => {
         if (user) {
@@ -79,17 +72,17 @@ const ContactUsPage = () => {
                 ...prev,
                 email: user.email || '',
                 fullName: profile?.full_name || user.user_metadata?.full_name || '',
-                message: isCampusCollaboration && !prev.message
-                    ? campusCollaborationMessage
+                message: contextualMessage && !prev.message
+                    ? contextualMessage
                     : prev.message,
             }));
-        } else if (isCampusCollaboration) {
+        } else if (contextualMessage) {
             setFormData(prev => ({
                 ...prev,
-                message: prev.message || campusCollaborationMessage,
+                message: prev.message || contextualMessage,
             }));
         }
-    }, [user, profile, institutes, isCampusCollaboration, campusCollaborationMessage]);
+    }, [user, profile, contextualMessage]);
 
     const handleInputChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { id, value } = e.target;
@@ -138,107 +131,92 @@ const ContactUsPage = () => {
     };
 
     const contactLinks = [
-        { icon: Mail, label: 'Email', value: CONTACT_DETAILS.email, href: `mailto:${CONTACT_DETAILS.email}`, gradient: 'from-blue-600 via-indigo-600 to-violet-700' },
-        { icon: Phone, label: 'WhatsApp', value: CONTACT_DETAILS.whatsappDisplay, href: CONTACT_DETAILS.whatsappUrl, gradient: 'from-emerald-600 via-teal-600 to-cyan-700' },
-        { icon: Instagram, label: 'Instagram', value: `@${CONTACT_DETAILS.instagramHandle}`, href: CONTACT_DETAILS.instagramUrl, gradient: 'from-rose-600 via-pink-600 to-fuchsia-700' },
-        { icon: Facebook, label: 'Facebook', value: CONTACT_DETAILS.facebookHandle, href: CONTACT_DETAILS.facebookUrl, gradient: 'from-blue-700 via-blue-600 to-indigo-700' },
-        { icon: Linkedin, label: 'LinkedIn', value: CONTACT_DETAILS.linkedinHandle, href: CONTACT_DETAILS.linkedinUrl, gradient: 'from-sky-600 via-blue-600 to-indigo-700' },
+        { icon: Mail, label: 'Email', value: CONTACT_DETAILS.email, href: `mailto:${CONTACT_DETAILS.email}` },
+        { icon: Phone, label: 'WhatsApp', value: CONTACT_DETAILS.whatsappDisplay, href: CONTACT_DETAILS.whatsappUrl },
+        { icon: Instagram, label: 'Instagram', value: `@${CONTACT_DETAILS.instagramHandle}`, href: CONTACT_DETAILS.instagramUrl },
+        { icon: Facebook, label: 'Facebook', value: CONTACT_DETAILS.facebookHandle, href: CONTACT_DETAILS.facebookUrl },
+        { icon: Linkedin, label: 'LinkedIn', value: CONTACT_DETAILS.linkedinHandle, href: CONTACT_DETAILS.linkedinUrl },
     ];
 
     return (
-        <div className="min-h-screen w-full bg-[#F8FAFC] dark:bg-gray-950">
-            <Seo title="Contact Us" description="Get in touch with Medmacs App" canonical="https://medmacs.app/contact-us" />
+        <div className="min-h-screen w-full bg-background text-foreground">
+            <Seo title="Contact Us" description="Get in touch with Medmacs" canonical="https://medmacs.app/contact-us" />
 
-            <div
-                ref={headerRef}
-                className={`fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/40 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] transition-transform duration-300 ${headerVisible ? 'translate-y-0' : '-translate-y-full'}`}
-            >
-                <div className="container mx-auto px-4 py-4 flex justify-between items-center max-w-7xl">
-                    <Button asChild variant="ghost" size="sm" className="w-9 h-9 p-0 hover:scale-110">
-                        <Link to="/dashboard" aria-label="Back to dashboard">
-                            <ArrowLeft className="h-5 w-5" />
-                        </Link>
-                    </Button>
-                    <div className="flex items-center gap-2">
-                        <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" className="w-7 h-7" />
-                        <span className="text-lg font-black">Contact Us</span>
-                    </div>
-                    <div className="w-9" />
+            <header className="fixed inset-x-0 top-0 z-50 border-b border-border/40 bg-background/95 px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] backdrop-blur-xl sm:px-6">
+                <div className="relative mx-auto grid w-full max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+                    <Link to="/dashboard" aria-label="Back to dashboard" className="flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+                        <ArrowLeft className="h-5 w-5" />
+                    </Link>
+                    <h1 className="brand-wordmark text-xl text-foreground">Contact Us</h1>
+                    <div aria-hidden="true" />
                 </div>
-            </div>
+            </header>
 
-            <main className="container mx-auto px-4 py-8 max-w-2xl mt-[var(--header-height)]">
-                <div className="text-center mb-8">
-                    <h1 className="text-2xl md:text-4xl font-black tracking-tight text-foreground uppercase italic">
-                        Get in <span className="text-blue-600">Touch</span>
-                    </h1>
-                    <p className="text-muted-foreground text-xs uppercase tracking-[0.2em] mt-2">We'd love to hear from you</p>
-                </div>
+            <main className="mx-auto w-full max-w-4xl px-5 pb-12 pt-[calc(var(--header-height)+1.5rem)] sm:px-8">
+                {isSeqBetaFeedback && (
+                    <section className="mb-8 flex items-start gap-3 border-y border-primary/20 bg-primary/[0.06] px-4 py-3 text-sm leading-relaxed" aria-label="Short Questions beta feedback">
+                        <FlaskConical className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                        <div>
+                            <p className="font-bold text-foreground">Short Questions beta feedback</p>
+                            <p className="mt-0.5 text-muted-foreground">Tell us what happened and what you expected. We will use it to improve the beta experience.</p>
+                        </div>
+                    </section>
+                )}
 
-                {/* Contact cards - pricing style */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+                <section className="mb-9">
+                    <p className="text-[11px] font-black uppercase tracking-[0.18em] text-primary">Support</p>
+                    <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">How can we help?</h1>
+                    <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">Send us feedback, report an issue, or reach out through any of the channels below.</p>
+                </section>
+
+                <section className="mb-10 grid grid-cols-1 border-y border-border/60 sm:grid-cols-2 lg:grid-cols-3" aria-label="Contact channels">
                     {contactLinks.map((item, i) => (
-                        <a key={i} href={item.href} target="_blank" rel="noopener noreferrer"
-                           className={`relative overflow-hidden rounded-[1.5rem] bg-gradient-to-br ${item.gradient} text-white p-4 shadow-xl hover:scale-105 transition-all duration-300 ${i === 0 ? 'col-span-2 sm:col-span-1' : ''}`}>
-                            <div className="absolute inset-0 opacity-10" style={{
-                                backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 15px, rgba(255,255,255,0.3) 15px, rgba(255,255,255,0.3) 30px)`,
-                                maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)'
-                            }} />
-                            <div className="relative z-10">
-                                <item.icon className="w-5 h-5 mb-2 opacity-80" />
-                                <p className="text-[10px] font-bold uppercase tracking-widest opacity-70">{item.label}</p>
-                                <p className="text-xs font-bold mt-1 truncate">{item.value}</p>
-                            </div>
+                        <a key={i} href={item.href} target="_blank" rel="noopener noreferrer" className="group flex min-h-20 items-center gap-3 border-b border-border/60 px-3 py-3 transition-colors hover:bg-accent/60 sm:[&:nth-last-child(-n+2)]:border-b-0 lg:[&:nth-last-child(-n+3)]:border-b-0">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                                <item.icon className="h-4 w-4" />
+                            </span>
+                            <span className="min-w-0">
+                                <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-muted-foreground">{item.label}</span>
+                                <span className="mt-0.5 block truncate text-sm font-semibold text-foreground">{item.value}</span>
+                            </span>
                         </a>
                     ))}
-                </div>
+                </section>
 
-                {/* Message form - glass card */}
-                <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-500 via-slate-600 to-slate-700 text-white shadow-2xl p-1">
-                    <div className="absolute inset-0 opacity-10" style={{
-                        backgroundImage: `repeating-linear-gradient(45deg, transparent, transparent 20px, rgba(255,255,255,0.4) 20px, rgba(255,255,255,0.4) 40px)`,
-                        maskImage: 'radial-gradient(circle at center, black 30%, transparent 80%)'
-                    }} />
-                    <div className="relative z-10 bg-white/10 backdrop-blur-xl rounded-[1.8rem] p-6 border border-white/10">
-                        <h2 className="text-xl font-black uppercase tracking-tight mb-1">Send a Message</h2>
-                        <p className="text-xs text-white/60 mb-6">Questions, feedback, or support requests</p>
-
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <Label htmlFor="fullName" className="text-white/80 text-xs font-bold uppercase tracking-wider">Full Name</Label>
-                                <Input id="fullName" value={formData.fullName} onChange={handleInputChange} required
-                                    readOnly={!!user && !!profile?.full_name}
-                                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 rounded-xl h-11 mt-1" />
-                                {formErrors.fullName && <p className="text-red-300 text-xs mt-1">{formErrors.fullName}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="email" className="text-white/80 text-xs font-bold uppercase tracking-wider">Email</Label>
-                                <Input id="email" type="email" value={formData.email} onChange={handleInputChange} required
-                                    readOnly={!!user && !!user.email}
-                                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 rounded-xl h-11 mt-1" />
-                                {formErrors.email && <p className="text-red-300 text-xs mt-1">{formErrors.email}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="message" className="text-white/80 text-xs font-bold uppercase tracking-wider">Message</Label>
-                                <Textarea id="message" value={formData.message} onChange={handleInputChange} rows={5}
-                                    placeholder="Type your message..."
-                                    className="bg-white/10 border-white/20 text-white placeholder:text-white/40 rounded-xl mt-1" />
-                                {formErrors.message && <p className="text-red-300 text-xs mt-1">{formErrors.message}</p>}
-                            </div>
-                            <Button type="submit" disabled={submitMessageMutation.isPending}
-                                className="w-full bg-white text-slate-900 hover:scale-105 transition-all rounded-xl h-12 uppercase font-black text-xs tracking-widest shadow-2xl">
-                                {submitMessageMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                                {submitMessageMutation.isPending ? 'Sending...' : 'Send Message'}
-                            </Button>
-                            {showSuccessMessage && (
-                                <div className="flex items-center gap-2 p-3 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-sm">
-                                    <CheckCircle className="h-4 w-4 shrink-0" />
-                                    <span>Message received! We'll get back to you soon.</span>
-                                </div>
-                            )}
-                        </form>
+                <section>
+                    <div className="mb-6 border-b border-border/60 pb-4">
+                        <h2 className="text-xl font-black tracking-tight text-foreground">Send a message</h2>
+                        <p className="mt-1 text-sm text-muted-foreground">Questions, feedback, or support requests—we read every message.</p>
                     </div>
-                </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div>
+                            <Label htmlFor="fullName" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Full Name</Label>
+                            <Input id="fullName" value={formData.fullName} onChange={handleInputChange} required readOnly={!!user && !!profile?.full_name} className="mt-2 h-11 rounded-xl border-border bg-background text-foreground" />
+                            {formErrors.fullName && <p className="mt-1 text-xs text-destructive">{formErrors.fullName}</p>}
+                        </div>
+                        <div>
+                            <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email</Label>
+                            <Input id="email" type="email" value={formData.email} onChange={handleInputChange} required readOnly={!!user && !!user.email} className="mt-2 h-11 rounded-xl border-border bg-background text-foreground" />
+                            {formErrors.email && <p className="mt-1 text-xs text-destructive">{formErrors.email}</p>}
+                        </div>
+                        <div>
+                            <Label htmlFor="message" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Message</Label>
+                            <Textarea id="message" value={formData.message} onChange={handleInputChange} rows={5} placeholder="Type your message..." className="mt-2 min-h-40 resize-y rounded-xl border-border bg-background text-foreground placeholder:text-muted-foreground" />
+                            {formErrors.message && <p className="mt-1 text-xs text-destructive">{formErrors.message}</p>}
+                        </div>
+                        <Button type="submit" disabled={submitMessageMutation.isPending} className="h-12 w-full rounded-xl bg-primary font-black uppercase tracking-widest text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90">
+                            {submitMessageMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            {submitMessageMutation.isPending ? 'Sending...' : 'Send Message'}
+                        </Button>
+                        {showSuccessMessage && (
+                            <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 p-3 text-sm text-foreground">
+                                <CheckCircle className="h-4 w-4 shrink-0 text-primary" />
+                                <span>Message received! We'll get back to you soon.</span>
+                            </div>
+                        )}
+                    </form>
+                </section>
             </main>
         </div>
     );

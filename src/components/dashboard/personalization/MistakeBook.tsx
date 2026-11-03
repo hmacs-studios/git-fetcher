@@ -13,7 +13,6 @@ import { aiApiJson } from '@/utils/aiApi';
 
 type MistakeBookProps = {
   subjects: MistakeSubject[];
-  isPremium: boolean;
 };
 
 const MistakeChapterRow = ({ chapter, onClick }: { chapter: MistakeChapter; onClick: () => void }) => {
@@ -44,7 +43,7 @@ const MistakeChapterRow = ({ chapter, onClick }: { chapter: MistakeChapter; onCl
   );
 };
 
-export const MistakeBook = ({ subjects, isPremium }: MistakeBookProps) => {
+export const MistakeBook = ({ subjects }: MistakeBookProps) => {
   const [activeChapter, setActiveChapter] = useState<MistakeChapter | null>(null);
   const [correctionChapter, setCorrectionChapter] = useState<MistakeChapter | null>(null);
   const [correctionOpen, setCorrectionOpen] = useState(false);

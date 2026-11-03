@@ -11,12 +11,11 @@ const DMCAPolicy = () => {
         canonical="https://medmacs.app/dmca"
       />
 
-      <header className="sticky top-0 z-50 border-b border-primary/15 bg-white/90 backdrop-blur-xl dark:bg-slate-950/90">
-        <div className="container mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
-          <Link to="/" className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-primary hover:bg-primary/10">
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <span className="text-sm font-black uppercase tracking-[0.28em] text-primary">Medmacs</span>
+      <header className="sticky top-0 z-50 border-b border-primary/15 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-xl dark:bg-slate-950/90">
+        <div className="container mx-auto grid h-14 max-w-4xl grid-cols-[1fr_auto_1fr] items-center px-4">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-slate-950 dark:text-white">DMCA Policy</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 

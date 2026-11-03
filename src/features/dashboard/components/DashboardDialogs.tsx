@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CaseOfDayCard } from './CaseOfDayCard';
 import type { CaseOfDay, DashboardAnnouncement, TermOfDay, WhatsNewItem } from '../types';
+import { AnnouncementBody, formatAnnouncementText } from './AnnouncementText';
 
 type DashboardDialogsProps = {
   appVersion: string;
@@ -150,38 +151,36 @@ export function DashboardDialogs({
       </Dialog>
 
       <Dialog open={!!selectedAnnouncement} onOpenChange={(open) => !open && onSelectedAnnouncementChange(null)}>
-        <DialogContent className="sm:max-w-[430px] p-0 overflow-hidden border-0 rounded-[2rem] [&>button]:hidden">
+        <DialogContent data-dashboard-announcement-modal="true" className="!fixed !inset-x-0 !bottom-0 !top-auto !left-0 !translate-x-0 !translate-y-0 !w-full !max-w-none p-0 overflow-hidden border-0 rounded-t-[2rem] rounded-b-none [&>button]:hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom sm:!left-1/2 sm:!bottom-0 sm:!top-auto sm:!-translate-x-1/2 sm:!translate-y-0 sm:!w-[min(100%,430px)] sm:rounded-t-[2rem]">
           <DialogHeader>
             <DialogTitle className="sr-only">{selectedAnnouncement?.modal_heading || 'Dashboard announcement'}</DialogTitle>
             <DialogDescription className="sr-only">{selectedAnnouncement?.modal_subheading}</DialogDescription>
           </DialogHeader>
           {selectedAnnouncement && (
-            <div className="relative max-h-[82vh] overflow-hidden bg-[#06111f] text-white">
+            <div className="relative max-h-[calc(100dvh-env(safe-area-inset-top))] overflow-hidden bg-[#06111f] text-white">
               {selectedAnnouncement.modal_background_image_url ? (
                 <img src={selectedAnnouncement.modal_background_image_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
               ) : (
                 <div className="absolute inset-0 bg-gradient-to-br from-[#0f172a] via-[#0f766e] to-[#075985]" />
               )}
               <div className="absolute inset-0 bg-black/55" />
-              <div className="relative z-10 flex max-h-[82vh] flex-col">
+              <div className="relative z-10 flex max-h-[calc(100dvh-env(safe-area-inset-top))] flex-col">
                 <div className="flex items-start justify-between gap-4 p-5 pb-3">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#2dd4bf] mb-2">Medmacs Update</p>
-                    <h2 className="text-2xl font-black leading-tight tracking-tight">{selectedAnnouncement.modal_heading}</h2>
+                    <h2 className="whitespace-pre-wrap break-words text-2xl font-black leading-tight tracking-tight">{formatAnnouncementText(selectedAnnouncement.modal_heading)}</h2>
                   </div>
                   <button type="button" onClick={() => onSelectedAnnouncementChange(null)} aria-label="Close announcement" className="w-9 h-9 rounded-full bg-white/10 border border-white/10 flex items-center justify-center shrink-0">
                     <X className="w-4 h-4 text-white" />
                   </button>
                 </div>
-                <div className="overflow-y-auto px-5 pb-5">
-                  <p className="text-sm leading-6 text-white/78 mb-5">{selectedAnnouncement.modal_subheading}</p>
+                <div className="min-h-0 overflow-y-auto px-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+                  <AnnouncementBody text={selectedAnnouncement.modal_subheading} />
                   {!!selectedAnnouncement.modal_image_urls?.length && (
-                    <div className="mb-5 -mx-5 overflow-x-auto px-5">
-                      <div className="flex gap-3 pb-1">
+                    <div className="mb-5 space-y-3">
                         {selectedAnnouncement.modal_image_urls.map((imageUrl) => (
-                          <img key={imageUrl} src={imageUrl} alt="" className="h-40 w-64 shrink-0 rounded-2xl object-cover border border-white/10 shadow-lg" />
+                          <img key={imageUrl} src={imageUrl} alt="" className="h-auto w-full rounded-2xl border border-white/10 object-contain shadow-lg" />
                         ))}
-                      </div>
                     </div>
                   )}
                   {selectedAnnouncement.cta_text && selectedAnnouncement.cta_url && (

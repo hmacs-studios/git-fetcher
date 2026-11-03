@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect } from 'react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
-import { Play, Clock, Zap, ArrowRight, CheckCircle, Target, Timer } from 'lucide-react';
+import { Play, Clock, Zap, ArrowLeft, ArrowRight, CheckCircle, Target, Timer } from 'lucide-react';
 import { fetchChapterById, fetchSubjectById, Subject, Chapter } from '@/utils/mcqData';
 import { MCQPageLayout } from './MCQPageLayout';
 import { useAuth } from '@/hooks/useAuth';
@@ -42,7 +42,7 @@ const timerPresets: TimerPreset[] = [
     label: '30 sec',
     sublabel: 'Focused',
     icon: <Timer className="w-5 h-5" />,
-    description: 'Standard MDCAT exam timing per question.',
+    description: 'Standard Medical exam timing per question.',
     accentColor: 'text-blue-500',
     bgClass: 'bg-blue-500',
   },
@@ -160,17 +160,38 @@ const MCQSettingsPage = () => {
   }
 
   return (
-    <MCQPageLayout backTo={subjectId ? `/mcqs/chapter/${subjectId}` : '/mcqs'} scrollable>
-      <div className="z-50 -mx-3 shrink-0 bg-gradient-to-b from-background via-background to-background/95 px-3 sm:mx-0 sm:px-0">
+    <MCQPageLayout backTo={subjectId ? `/mcqs/chapter/${subjectId}` : '/mcqs'} showHeader={false} showBackButton={false} scrollable>
+      <header className="absolute inset-x-0 top-0 z-50 border-b border-border/60 bg-background/88 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+10px)] backdrop-blur-2xl">
+        <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
+          <Link
+            to={subjectId ? `/mcqs/chapter/${subjectId}` : '/mcqs'}
+            aria-label="Back to chapters"
+            className="flex h-11 w-11 shrink-0 items-center justify-start active:scale-95"
+          >
+            <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          </Link>
+
+          <div className="min-w-0 text-center">
+            <h1 className="brand-wordmark max-w-full truncate text-xl text-foreground">MCQs Practice</h1>
+          </div>
+
+          <Link
+            to="/detailed-analytics"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary transition-all hover:bg-primary hover:text-white active:scale-95"
+            aria-label="Open MCQ practice analytics"
+          >
+            <Target className="h-5 w-5" />
+          </Link>
+        </div>
+      </header>
+
+      <div className="z-40 -mx-3 shrink-0 bg-gradient-to-b from-background via-background to-background/95 px-3 pt-[calc(env(safe-area-inset-top,0px)+84px)] sm:mx-0 sm:px-0">
         <div className="max-w-4xl mx-auto px-4 sm:px-0">
           <div className="py-3">
             <div className="flex items-center justify-between gap-3">
-              <h2 className="font-['Syne'] text-2xl font-extrabold leading-tight tracking-[-0.035em] text-foreground sm:text-3xl">
-                Quiz <span className="live-gradient-text">Settings</span>
+              <h2 className="font-['Bricolage_Grotesque'] text-2xl font-extrabold leading-tight tracking-[-0.035em] text-foreground sm:text-3xl">
+                Test <span className="text-primary">Settings</span>
               </h2>
-              <Button asChild variant="outline" className="h-9 shrink-0 rounded-full px-3">
-                <Link to="/detailed-analytics"><Target className="mr-2 h-4 w-4 text-primary" /><span className="hidden text-[11px] sm:inline">Practice Analytics</span><span className="text-[11px] sm:hidden">Analyze</span></Link>
-              </Button>
             </div>
             <div className="mt-2 flex flex-col items-center gap-1">
               <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest">
@@ -329,7 +350,7 @@ const MCQSettingsPage = () => {
 
       </div>
       <footer className="shrink-0 py-2 text-center opacity-40">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs App • MCQ Practice System</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">© 2026 Medmacs • MCQ Practice System</p>
       </footer>
     </MCQPageLayout>
   );

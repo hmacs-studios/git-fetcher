@@ -1,8 +1,10 @@
+import React from 'react';
+
 type BrandedLoaderProps = {
   fullscreen?: boolean;
 };
 
-const BrandedLoader = ({ fullscreen = true }: BrandedLoaderProps) => {
+const BrandedLoader: React.FC<BrandedLoaderProps> = ({ fullscreen = true }) => {
   return (
     <div
       className={[

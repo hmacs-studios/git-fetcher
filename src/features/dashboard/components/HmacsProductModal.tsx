@@ -78,7 +78,7 @@ export function HmacsProductModal({ product, open, onOpenChange }: HmacsProductM
             )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-0.5">
-                <SheetTitle className="text-2xl font-black tracking-tight text-foreground brand-syne leading-none">
+                <SheetTitle className="text-2xl font-black tracking-tight text-foreground brand-display leading-none">
                   {product.project_name}
                 </SheetTitle>
                 {product.status && product.status !== 'Available' && (

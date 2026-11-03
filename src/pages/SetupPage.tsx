@@ -7,9 +7,9 @@ import {
 import { useTheme } from 'next-themes';
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import { NavigationBar } from '@capgo/capacitor-navigation-bar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -19,11 +19,49 @@ import { getInstituteYearOptions, getProfileCompletion, VALID_PROFILE_YEARS } fr
 import { generateUniqueReferralCode, resolveReferralCode } from '@/utils/referral';
 import { notifyAchievementProgress } from '@/components/profile/AchievementBadges';
 import { getUsernameValidationError, isUsernameConflict, normalizeUsername } from '@/utils/username';
+import {
+  getEffectiveProgramCode,
+  getInstituteProgramCodes,
+  STUDY_PROGRAMS,
+  type StudyProgramCode,
+} from '@/utils/studyPrograms';
 
 const VALID_YEARS = VALID_PROFILE_YEARS;
+const PROGRAM_YEAR_OPTION_STYLES: Record<StudyProgramCode, { idle: string; selected: string; divider: string }> = {
+  mbbs: {
+    idle: 'border-red-200 bg-red-50 text-red-900 hover:bg-red-100 dark:border-red-900/70 dark:bg-red-950/35 dark:text-red-100 dark:hover:bg-red-950/55',
+    selected: 'border-red-400 bg-red-100 text-red-950 ring-2 ring-red-300/50 dark:border-red-600 dark:bg-red-950/70 dark:text-red-50 dark:ring-red-700/50',
+    divider: 'bg-red-200 text-red-700 dark:bg-red-900/70 dark:text-red-300',
+  },
+  bds: {
+    idle: 'border-blue-200 bg-blue-50 text-blue-900 hover:bg-blue-100 dark:border-blue-900/70 dark:bg-blue-950/35 dark:text-blue-100 dark:hover:bg-blue-950/55',
+    selected: 'border-blue-400 bg-blue-100 text-blue-950 ring-2 ring-blue-300/50 dark:border-blue-600 dark:bg-blue-950/70 dark:text-blue-50 dark:ring-blue-700/50',
+    divider: 'bg-blue-200 text-blue-700 dark:bg-blue-900/70 dark:text-blue-300',
+  },
+  pharm_d: {
+    idle: 'border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100 dark:border-amber-900/70 dark:bg-amber-950/35 dark:text-amber-100 dark:hover:bg-amber-950/55',
+    selected: 'border-amber-400 bg-amber-100 text-amber-950 ring-2 ring-amber-300/50 dark:border-amber-600 dark:bg-amber-950/70 dark:text-amber-50 dark:ring-amber-700/50',
+    divider: 'bg-amber-200 text-amber-700 dark:bg-amber-900/70 dark:text-amber-300',
+  },
+};
+const usernameFromName = (name?: string | null) => {
+  const ignored = new Set(['dr', 'doctor', 'mr', 'mrs', 'ms', 'miss', 'prof', 'professor']);
+  const muhammad = new Set(['muhammad', 'mohammad', 'mohammed', 'mohd', 'md']);
+  const words = String(name || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).filter(word => !ignored.has(word));
+  return (muhammad.has(words[0]) && words[1] ? words[1] : words[0] || 'med_student').slice(0, 14);
+};
+const getSetupFullName = (user: { email?: string | null; user_metadata?: { full_name?: unknown } } | null) =>
+  String(user?.user_metadata?.full_name || '').trim()
+  || String(user?.email || '').split('@')[0].trim()
+  || 'Medmacs User';
 type SetupSelectionCategory = 'institute' | 'specialized_test';
 type SetupThemeChoice = 'light' | 'dark';
 type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+type PendingYearSelection = {
+  year: string;
+  label: string;
+  programCode?: StudyProgramCode;
+};
 type HeardAboutUsOption = {
   value: string;
   label: string;
@@ -70,10 +108,13 @@ const SetupWizard = () => {
   const [saving, setSaving] = useState(false);
   const [institutes, setInstitutes] = useState<Institute[]>([]);
   const [selectionCategory, setSelectionCategory] = useState<SetupSelectionCategory>('institute');
+  const [showYearPicker, setShowYearPicker] = useState(false);
+  const [pendingYearSelection, setPendingYearSelection] = useState<PendingYearSelection | null>(null);
 
   const [username, setUsername] = useState('');
   const [institute, setInstitute] = useState('');
   const [year, setYear] = useState('');
+  const [programCode, setProgramCode] = useState<StudyProgramCode>('mbbs');
   const [usernameError, setUsernameError] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const [existingProfile, setExistingProfile] = useState<any>(null);
@@ -160,6 +201,7 @@ const SetupWizard = () => {
 
     const applyNativeBars = async () => {
       try {
+        const { NavigationBar } = await import('@capgo/capacitor-navigation-bar');
         await StatusBar.setStyle({ style: setupTheme === 'dark' ? Style.Dark : Style.Light });
         await StatusBar.setBackgroundColor({ color: 'transparent' });
 
@@ -217,7 +259,7 @@ const SetupWizard = () => {
 
     const profileSeed = {
       id: user.id,
-      full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || null,
+      full_name: getSetupFullName(user),
       avatar_url: user.user_metadata?.avatar_url || user.user_metadata?.picture || null,
       referral_code: referralCode,
       referred_by: referredBy,
@@ -262,10 +304,10 @@ const SetupWizard = () => {
     // Brand-new users should see the welcome step first.
     if (!hasUsername && !hasInstitute && !hasValidYear) return 0;
     const completion = getProfileCompletion(profile, instituteRows);
-    if (completion.complete) return 6;
-    if (completion.reason === 'missing_username') return 1;
+    if (completion.complete) return 4;
+    if (completion.reason === 'missing_username' || completion.reason === 'missing_full_name') return 1;
     if (completion.reason === 'missing_institute' || completion.reason === 'unknown_institute') return 2;
-    if (completion.reason === 'missing_year') return 3;
+    if (completion.reason === 'missing_year') return 2;
     return 0;
   }, []);
 
@@ -302,9 +344,10 @@ const SetupWizard = () => {
       setHeardAboutUsOptions(heardOptions);
       setExistingProfile(profile);
 
-      setUsername(profile?.username || '');
+      setUsername(profile?.username || usernameFromName(profile?.full_name || getSetupFullName(user)));
       setInstitute((profile as any)?.institute || '');
       setYear((profile as any)?.year || '');
+      setProgramCode(getEffectiveProgramCode((profile as any)?.program_code));
       setHeardAboutUs((profile as any)?.heard_about_us || '');
       const selectedInstitute = getInstituteByCode((profile as any)?.institute || '', insts);
       setSelectionCategory(
@@ -322,12 +365,12 @@ const SetupWizard = () => {
       setStudyPathChangeMode(changeMode);
       if (changeMode && !canChangeStudyPathNow(profile)) {
         sessionStorage.removeItem('medmacs_setup_change_verified');
-        toast.error(`You can change institute or specialized test once per week. Try again after ${formatStudyPathChangeDate(getNextStudyPathChangeAt(profile))}.`);
+        toast.error(`You can change institute or Post Graduate Exam once per week. Try again after ${formatStudyPathChangeDate(getNextStudyPathChangeAt(profile))}.`);
         navigate('/dashboard', { replace: true });
         return;
       }
       const initialStep = changeMode ? 2 : getInitialStep(profile, insts);
-      if (initialStep === 6) { navigate('/dashboard', { replace: true }); return; }
+      if (initialStep === 4) { navigate('/dashboard', { replace: true }); return; }
       setCurrentStep(initialStep);
     } catch (error) {
       console.error('Failed to initialize setup profile:', error);
@@ -434,7 +477,7 @@ const SetupWizard = () => {
       const { error } = await supabase.from('profiles').upsert({
         id: user!.id,
         username: normalizeUsername(username),
-        full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || null,
+        full_name: String(existingProfile?.full_name || '').trim() || getSetupFullName(user),
         updated_at: new Date().toISOString(),
       } as any, { onConflict: 'id' });
       setSaving(false);
@@ -451,12 +494,12 @@ const SetupWizard = () => {
     if (currentStep === 2) {
       if (studyPathChangeMode && !canChangeStudyPathNow()) {
         sessionStorage.removeItem('medmacs_setup_change_verified');
-        toast.error(`You can change institute or specialized test once per week. Try again after ${formatStudyPathChangeDate(getNextStudyPathChangeAt())}.`);
+        toast.error(`You can change institute or Post Graduate Exam once per week. Try again after ${formatStudyPathChangeDate(getNextStudyPathChangeAt())}.`);
         navigate('/dashboard', { replace: true });
         return;
       }
       if (!institute) {
-        toast.error(selectionCategory === 'specialized_test' ? 'Please select a specialized test' : 'Please select an institute');
+        toast.error(selectionCategory === 'specialized_test' ? 'Please select a Post Graduate Exam' : 'Please select an institute');
         return;
       }
       const selectedInstitute = getInstituteByCode(institute, institutes);
@@ -465,11 +508,16 @@ const SetupWizard = () => {
         isSpecializedTestInstitute(selectedInstitute) ||
         isSpecializedTestCode(institute);
       const yearOptions = getInstituteYearOptions(selectedInstitute);
-      const nextYear = yearOptions.length === 1 ? yearOptions[0] : null;
-      const requiresYearChoice = yearOptions.length > 1;
+      const nextYear = selectedSpecializedTest && yearOptions.length === 1 ? yearOptions[0] : null;
+      const requiresYearChoice = selectedSpecializedTest ? yearOptions.length > 1 : true;
+      if (requiresYearChoice && !year) {
+        setShowYearPicker(true);
+        return;
+      }
       const profilePatch: any = {
         institute,
-        year: nextYear,
+        year: requiresYearChoice ? year : nextYear,
+        program_code: selectedSpecializedTest ? null : programCode,
         updated_at: new Date().toISOString(),
       };
       if (studyPathChangeMode) profilePatch.study_path_changed_at = new Date().toISOString();
@@ -479,88 +527,22 @@ const SetupWizard = () => {
         : await supabase.from('profiles').upsert({ id: user!.id, ...profilePatch }, { onConflict: 'id' });
       setSaving(false);
       if (error) {
-        toast.error(selectedSpecializedTest ? 'Failed to save specialized test' : 'Failed to save institute');
-        return;
-      }
-      if (requiresYearChoice) {
-        setYear('');
-        setCurrentStep(3);
+        toast.error(selectedSpecializedTest ? 'Failed to save Post Graduate Exam' : 'Failed to save institute');
         return;
       }
       if (nextYear) setYear(nextYear);
       if (studyPathChangeMode) {
         sessionStorage.removeItem('medmacs_setup_change_verified');
-        toast.success(selectedSpecializedTest ? 'Specialized test updated.' : 'Institute updated.');
+        toast.success(selectedSpecializedTest ? 'Post Graduate Exam updated.' : 'Institute updated.');
         navigate('/dashboard', { replace: true });
         return;
       }
-      setCurrentStep(4);
+      setCurrentStep(3);
       return;
     }
     if (currentStep === 3) {
-      if (studyPathChangeMode && !canChangeStudyPathNow()) {
-        sessionStorage.removeItem('medmacs_setup_change_verified');
-        toast.error(`You can change institute or specialized test once per week. Try again after ${formatStudyPathChangeDate(getNextStudyPathChangeAt())}.`);
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-      if (!year) { toast.error('Please select your year'); return; }
-      setSaving(true);
-      const profilePatch: any = {
-        ...(studyPathChangeMode ? { institute } : {}),
-        year,
-        updated_at: new Date().toISOString(),
-        ...(studyPathChangeMode ? { study_path_changed_at: new Date().toISOString() } : {}),
-      };
-      const { error } = studyPathChangeMode
-        ? await supabase.from('profiles').update(profilePatch).eq('id', user!.id)
-        : await supabase.from('profiles').upsert({ id: user!.id, ...profilePatch }, { onConflict: 'id' });
-      setSaving(false);
-      if (error) {
-        console.error('Failed to save year', error);
-        toast.error(error.message || 'Failed to save year');
-        return;
-      }
-      if (studyPathChangeMode) {
-        sessionStorage.removeItem('medmacs_setup_change_verified');
-        toast.success('Institute updated.');
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-      setCurrentStep(4);
-      return;
+      navigate('/dashboard');
     }
-    if (currentStep === 4) {
-      if (referralStepCode && !referredByName) {
-        setSaving(true);
-        const referrerId = await resolveReferralCode(referralStepCode);
-        if (referrerId) {
-          await supabase.from('profiles').update({ referred_by: referrerId }).eq('id', user!.id);
-          const { data: referrer } = await supabase.from('profiles').select('full_name, username').eq('id', referrerId).maybeSingle();
-          if (referrer) setReferredByName(referrer.full_name || referrer.username || 'a friend');
-          notifyAchievementProgress('referral');
-        }
-        setSaving(false);
-      }
-      setCurrentStep(5);
-      return;
-    }
-    if (currentStep === 5) {
-      if (heardAboutUs) {
-        setSaving(true);
-        const { error } = await supabase
-          .from('profiles')
-          .update({ heard_about_us: heardAboutUs, updated_at: new Date().toISOString() } as any)
-          .eq('id', user!.id);
-        setSaving(false);
-        if (error) {
-          console.warn('Failed to save heard_about_us during setup', error);
-        }
-      }
-      setCurrentStep(6);
-      return;
-    }
-    if (currentStep === 6) { navigate('/dashboard'); }
   };
 
   const handleBack = () => {
@@ -574,13 +556,55 @@ const SetupWizard = () => {
     if (currentStep > 0) setCurrentStep(prev => prev - 1);
   };
 
+  const handleConfirmYearSelection = async () => {
+    if (!pendingYearSelection || saving) return;
+
+    const selection = pendingYearSelection;
+    const selectedProgramCode = selection.programCode || programCode;
+    const selectedInstitute = getInstituteByCode(institute, institutes);
+    const selectedSpecializedTest =
+      selectionCategory === 'specialized_test' ||
+      isSpecializedTestInstitute(selectedInstitute) ||
+      isSpecializedTestCode(institute);
+
+    setYear(selection.year);
+    setProgramCode(selectedProgramCode);
+    setPendingYearSelection(null);
+
+    // Move forward immediately while the small profile update completes.
+    if (!studyPathChangeMode) setCurrentStep(3);
+
+    const profilePatch: any = {
+      institute,
+      year: selection.year,
+      program_code: selectedSpecializedTest ? null : selectedProgramCode,
+      updated_at: new Date().toISOString(),
+    };
+    if (studyPathChangeMode) profilePatch.study_path_changed_at = new Date().toISOString();
+
+    setSaving(true);
+    const { error } = studyPathChangeMode
+      ? await supabase.from('profiles').update(profilePatch).eq('id', user!.id)
+      : await supabase.from('profiles').upsert({ id: user!.id, ...profilePatch }, { onConflict: 'id' });
+    setSaving(false);
+
+    if (error) {
+      if (!studyPathChangeMode) setCurrentStep(2);
+      toast.error(selectedSpecializedTest ? 'Failed to save Post Graduate Exam' : 'Failed to save institute and year');
+      return;
+    }
+
+    if (studyPathChangeMode) {
+      sessionStorage.removeItem('medmacs_setup_change_verified');
+      toast.success(selectedSpecializedTest ? 'Post Graduate Exam updated.' : 'Institute updated.');
+      navigate('/dashboard', { replace: true });
+    }
+  };
+
   const steps = [
     { title: 'Welcome', icon: Sparkles },
     { title: 'Username', icon: User },
     { title: 'Study Path', icon: Building2 },
-    { title: 'Year', icon: GraduationCap },
-    { title: 'Referral', icon: Gift },
-    { title: 'Source', icon: Megaphone },
     { title: 'All Set', icon: CheckCircle2 },
   ];
 
@@ -595,7 +619,7 @@ const SetupWizard = () => {
   ];
   const haloLayout = haloLayouts[currentStep] || haloLayouts[0];
   const setupIsDark = setupTheme === 'dark';
-  const headingClass = "font-['Syne'] text-[clamp(2rem,8vw,2.8rem)] font-extrabold leading-[1.02] tracking-[-.055em] text-white";
+  const headingClass = "font-['Bricolage_Grotesque'] text-[clamp(2rem,8vw,2.8rem)] font-extrabold leading-[1.02] tracking-[-.055em] text-white";
 
   if (loading || authLoading) {
     return (
@@ -612,7 +636,9 @@ const SetupWizard = () => {
           <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
             <User className="h-6 w-6 text-white/80" />
           </div>
-          <h1 className="font-['Syne'] text-2xl font-extrabold tracking-[-.045em]">Profile Setup Unavailable</h1>
+          <h1 className="font-['Bricolage_Grotesque'] text-2xl font-extrabold tracking-[-.045em]">
+            Profile Setup <span className="font-extrabold text-cyan-300">Unavailable</span>
+          </h1>
           <p className="mt-3 text-sm leading-relaxed text-white/60">{setupLoadError}</p>
           <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Button onClick={() => navigate('/dashboard', { replace: true })} variant="outline" className="h-12 rounded-2xl border-white/20 bg-white/5 text-white hover:bg-white/10">
@@ -648,7 +674,7 @@ const SetupWizard = () => {
       return searchable.includes(searchTerm);
     }) : [];
     const groupedInstitutes = filteredInstitutes.reduce<Record<string, Institute[]>>((groups, inst) => {
-      const groupName = selectionCategory === 'institute' ? getInstituteProvince(inst) : 'Specialized Tests';
+      const groupName = selectionCategory === 'institute' ? getInstituteProvince(inst) : 'Post Graduate Exams';
       if (!groups[groupName]) groups[groupName] = [];
       groups[groupName].push(inst);
       return groups;
@@ -669,7 +695,15 @@ const SetupWizard = () => {
       return (
         <button
           key={inst.code}
-          onClick={() => inst.enabled && setInstitute(inst.code)}
+          onClick={() => {
+            if (!inst.enabled) return;
+            setInstitute(inst.code);
+            setYear('');
+            setProgramCode('mbbs');
+            if (getInstituteYearOptions(inst).length > 1 || !isSpecializedTestInstitute(inst)) {
+              setShowYearPicker(true);
+            }
+          }}
           disabled={!inst.enabled}
           className={`w-full flex items-center gap-3 ${compact ? 'p-2.5' : 'p-3'} rounded-2xl border-2 transition-all duration-200 text-left ${
             selected
@@ -737,21 +771,19 @@ const SetupWizard = () => {
               />
             </motion.div>
             <h2 className={`${headingClass} mb-3 max-w-full text-balance`}>
-              <span className="block">Welcome,</span>
+              <span className="setup-heading-accent mb-2 font-extrabold text-cyan-300">Welcome,</span>
               <motion.span
-                className="mx-auto mt-1 inline-block max-w-full break-words bg-[linear-gradient(90deg,#2dd4bf,#0ea5e9,#22d3ee,#2dd4bf)] bg-[length:220%_100%] bg-clip-text text-transparent"
+                className="mx-auto mt-1 block max-w-full break-words text-white"
                 initial={{ opacity: 0, y: 12, filter: 'blur(8px)' }}
                 animate={{
                   opacity: 1,
                   y: 0,
                   filter: 'blur(0px)',
-                  backgroundPosition: ['0% 50%', '100% 50%', '0% 50%'],
                 }}
                 transition={{
                   opacity: { delay: 0.28, duration: 0.6, ease: [0.22, 1, 0.36, 1] },
                   y: { delay: 0.28, duration: 0.6, ease: [0.22, 1, 0.36, 1] },
                   filter: { delay: 0.28, duration: 0.6, ease: [0.22, 1, 0.36, 1] },
-                  backgroundPosition: { duration: 3.8, repeat: Infinity, ease: 'easeInOut' },
                 }}
               >
                 {displayName}!
@@ -793,7 +825,7 @@ const SetupWizard = () => {
       case 1:
         return (
           <div className="text-center max-w-md mx-auto">
-            <h2 className={`${headingClass} mb-2`}>Choose Your Username</h2>
+            <h2 className={`${headingClass} mb-2`}>Choose Your <span className="setup-heading-accent text-cyan-300">Username</span></h2>
             <p className="text-white/60 text-sm mb-8">This will be visible on leaderboards and battles.</p>
             <div className="relative">
               <Input
@@ -941,7 +973,7 @@ const SetupWizard = () => {
                 </AnimatePresence>
               </div>
               <div className={`transition-all duration-300 ${studyOverlayOpen ? 'pointer-events-none blur-[2px] opacity-55' : ''}`}>
-              <h2 className={`${headingClass} mb-2`}>Choose Your Study Path</h2>
+              <h2 className={`${headingClass} mb-2`}>Choose Your <span className="setup-heading-accent text-cyan-300">Study Path</span></h2>
               <p className="text-white/60 text-sm">
                 {selectionCategory === 'specialized_test'
                   ? "We'll tailor content for your selected exam."
@@ -953,7 +985,7 @@ const SetupWizard = () => {
                     ? 'border-cyan-400/20 bg-cyan-950/40 text-cyan-200'
                     : 'border-cyan-600/20 bg-cyan-50 text-cyan-900'
                 }`}>
-                  You can change institute or specialized test once per week. This weekly cooldown starts after you save this change.
+                  You can change institute or Post Graduate Exam once per week. This weekly cooldown starts after you save this change.
                 </p>
               )}
               </div>
@@ -965,7 +997,7 @@ const SetupWizard = () => {
                   Institutes
                 </TabsTrigger>
                 <TabsTrigger value="specialized_test" className="rounded-none border-b-2 border-transparent bg-transparent px-2 pb-3 pt-1 text-xs font-black text-white/50 shadow-none transition-all data-[state=active]:border-cyan-400 data-[state=active]:bg-transparent data-[state=active]:!text-cyan-300 data-[state=active]:shadow-none">
-                  Specialized Tests
+                  Post Graduate Exams
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -984,7 +1016,7 @@ const SetupWizard = () => {
               {filteredInstitutes.length === 0 && (
                 <div className="rounded-2xl border-2 border-white/10 bg-white/5 p-5 text-sm font-semibold text-white/60">
                   {selectionCategory === 'specialized_test'
-                    ? 'Specialized tests are coming soon.'
+                    ? 'Post Graduate Exams are coming soon.'
                     : 'No institutes match your filters.'}
                 </div>
               )}
@@ -993,7 +1025,7 @@ const SetupWizard = () => {
           </div>
         );
 
-      case 3: {
+      case 99: {
         const selectedInstitute = getInstituteByCode(institute, institutes);
         const yearOptions = getInstituteYearOptions(selectedInstitute);
         const selectedIsSpecializedTest =
@@ -1003,7 +1035,7 @@ const SetupWizard = () => {
 
         return (
           <div className="text-center max-w-md mx-auto">
-            <h2 className={`${headingClass} mb-2`}>Select Your {selectionLabel}</h2>
+            <h2 className={`${headingClass} mb-2`}>Select Your <span className="setup-heading-accent text-cyan-300">{selectionLabel}</span></h2>
             <p className="text-white/60 text-sm mb-8">
               Pick your {selectedIsSpecializedTest ? 'FCPS specialty' : 'current Medical year'}.
             </p>
@@ -1026,38 +1058,20 @@ const SetupWizard = () => {
         );
       }
 
-      case 4:
+      case 3:
         return (
           <div className="text-center max-w-md mx-auto">
-            <h2 className={`${headingClass} mb-2`}>Referral</h2>
-            {referredByName ? (
-              <div className="rounded-2xl bg-white/5 border-2 border-white/10 p-5 opacity-60 select-none">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <HeartHandshake className="h-6 w-6 text-white/70" />
-                  <p className="text-lg font-bold text-white/70">You were referred to Medmacs by <span className="text-primary-foreground">{referredByName}</span></p>
-                </div>
-                <p className="text-xs text-white/40 mt-1">Referral already applied</p>
-              </div>
-            ) : (
-              <div>
-                <p className="text-white/60 text-sm mb-6">Enter a referral code if you have one (optional).</p>
-                <Input
-                  value={referralStepCode}
-                  onChange={(e) => setReferralStepCode(e.target.value.toUpperCase().slice(0, 6))}
-                  placeholder="Enter referral code"
-                  className="h-14 rounded-2xl bg-white/10 border-white/20 text-white placeholder:text-white/40 text-center text-lg font-bold tracking-[0.25em] focus:ring-2 focus:ring-white/30 uppercase"
-                  maxLength={6}
-                />
-                <p className="text-white/30 text-xs mt-3">Ask a friend for their code</p>
-              </div>
-            )}
+            <motion.img initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} src="/mascots/Mascot14.png" alt="Dr Ahroid" className="w-44 h-auto mx-auto mb-5 drop-shadow-2xl" />
+            <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-300" />
+            <h2 className={`${headingClass} mb-3`}>You're All <span className="setup-heading-accent text-cyan-300">Set!</span></h2>
+            <p className="text-white/70 text-lg">Your Medical study space is ready.</p>
           </div>
         );
 
       case 5:
         return (
           <div className="text-center max-w-lg mx-auto">
-            <h2 className={`${headingClass} mb-2`}>Where did you hear about us?</h2>
+            <h2 className={`${headingClass} mb-2`}>Where did you hear about <span className="setup-heading-accent text-cyan-300">us?</span></h2>
             <p className="text-white/60 text-sm mb-6">This helps us understand what is working. You can skip it.</p>
             <div className="grid grid-cols-2 gap-3">
               {heardAboutUsOptions.map((option) => {
@@ -1097,7 +1111,7 @@ const SetupWizard = () => {
             <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.4, type: 'spring' }}>
               <CheckCircle2 className="mx-auto mb-4 h-10 w-10 text-emerald-300" />
             </motion.div>
-            <h2 className={`${headingClass} mb-3`}>You're All Set!</h2>
+            <h2 className={`${headingClass} mb-3`}>You're All <span className="setup-heading-accent text-cyan-300">Set!</span></h2>
             <p className="text-white/70 text-lg">Your profile is complete. Let's start learning!</p>
           </div>
         );
@@ -1108,10 +1122,7 @@ const SetupWizard = () => {
     if (currentStep === 0) return true;
     if (currentStep === 1) return usernameStatus === 'available';
     if (currentStep === 2) return !!institute;
-    if (currentStep === 3) return !!year;
-    if (currentStep === 4) return true;
-    if (currentStep === 5) return true;
-    if (currentStep === 6) return true;
+    if (currentStep === 3) return true;
     return false;
   };
 
@@ -1145,6 +1156,9 @@ const SetupWizard = () => {
           .setup-theme-light .setup-brand-gradient {
             background-image: linear-gradient(90deg, #0891b2 0%, #00a6c8 42%, #0f766e 100%) !important;
           }
+          .setup-theme-light .setup-heading-accent {
+            color: #0891b2 !important;
+          }
         `}</style>
       )}
       {setupIsDark && (
@@ -1165,10 +1179,7 @@ const SetupWizard = () => {
           alt="Medmacs"
           className="h-9 w-9 object-contain"
         />
-        <span className="font-['Syne'] text-sm font-extrabold tracking-[-.045em]">
-          <span className="setup-brand-gradient bg-gradient-to-r from-cyan-300 via-sky-300 to-teal-300 bg-clip-text text-transparent">Medmacs</span>
-          <span className="text-white">.app</span>
-        </span>
+        <span className="brand-wordmark text-lg text-white">Medmacs</span>
       </motion.div>
 
       {currentStep === 0 && (
@@ -1215,7 +1226,7 @@ const SetupWizard = () => {
           ))}
         </div>
         <div className={`flex items-center gap-3 ${currentStep > 0 ? 'justify-between' : 'justify-center'}`}>
-          {currentStep > 0 && currentStep < 6 && (
+          {currentStep > 0 && currentStep < 3 && (
             <Button
               onClick={handleBack}
               variant="outline"
@@ -1236,12 +1247,12 @@ const SetupWizard = () => {
                 ? 'bg-white text-black hover:bg-white/90'
                 : 'bg-gradient-to-r from-cyan-600 to-teal-500 text-white hover:from-cyan-500 hover:to-teal-400 shadow-cyan-700/20'
             } ${
-              currentStep > 0 && currentStep < 6 ? 'flex-1' : 'w-full max-w-md'
+              currentStep > 0 && currentStep < 3 ? 'flex-1' : 'w-full max-w-md'
             }`}
           >
             {saving ? (
               <Loader2 className="w-5 h-5 animate-spin" />
-            ) : currentStep === 6 ? (
+            ) : currentStep === 3 ? (
               <span className="flex items-center gap-2">Go to Dashboard <Sparkles className={`h-5 w-5 ${setupIsDark ? 'fill-black' : 'fill-white'}`} /></span>
             ) : currentStep === 0 ? (
               <span className="flex items-center gap-2">Let's Go <ChevronRight className="h-5 w-5" /></span>
@@ -1251,6 +1262,110 @@ const SetupWizard = () => {
           </Button>
         </div>
       </div>
+      <Dialog open={showYearPicker} onOpenChange={setShowYearPicker}>
+        <DialogContent className="fixed inset-x-0 bottom-0 top-auto w-full translate-x-0 translate-y-0 rounded-t-[2rem] rounded-b-none border-x-0 border-b-0 px-6 pb-[calc(env(safe-area-inset-bottom,0px)+24px)] pt-4 data-[state=open]:[--tw-enter-translate-y:100%] data-[state=closed]:[--tw-exit-translate-y:100%] data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100 sm:left-1/2 sm:right-auto sm:w-[min(100%,28rem)] sm:-translate-x-1/2 sm:rounded-t-[2rem]">
+          <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-muted-foreground/25" />
+          <DialogHeader className="items-center text-center sm:text-center">
+            <span className="brand-wordmark mb-4 text-[1.85rem] text-foreground" aria-label="Medmacs">Medmacs</span>
+            <DialogTitle
+              className="text-[1.75rem] font-semibold leading-tight tracking-[-0.045em]"
+              style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+            >
+              Choose your <span className="font-extrabold text-teal-600 dark:text-teal-300">Year</span>
+            </DialogTitle>
+            <DialogDescription>This personalizes your medical study path.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[58dvh] overflow-y-auto pr-1">
+            {(() => {
+              const selectedInstitute = getInstituteByCode(institute, institutes);
+              const selectedIsSpecializedTest =
+                isSpecializedTestInstitute(selectedInstitute) || isSpecializedTestCode(institute);
+              if (selectedIsSpecializedTest) {
+                const specialtyOptions = getInstituteYearOptions(selectedInstitute);
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    {(specialtyOptions.length ? specialtyOptions : VALID_YEARS).map(option => (
+                      <Button
+                        key={option}
+                        variant={year === option ? 'default' : 'outline'}
+                        className="min-h-12 rounded-xl px-3 py-2"
+                        onClick={() => {
+                          setPendingYearSelection({ year: option, label: formatYearOptionLabel(option) });
+                          setShowYearPicker(false);
+                        }}
+                      >
+                        {formatYearOptionLabel(option)}
+                      </Button>
+                    ))}
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-5">
+                  {getInstituteProgramCodes(selectedInstitute).map(program => {
+                    const styles = PROGRAM_YEAR_OPTION_STYLES[program];
+                    return (
+                      <section key={program}>
+                        <div className="mb-3 flex items-center gap-3" aria-label={`${STUDY_PROGRAMS[program].label} years`}>
+                          <span className={`h-px flex-1 ${styles.divider.split(' ')[0]}`} />
+                          <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.16em] ${styles.divider}`}>
+                            {STUDY_PROGRAMS[program].label}
+                          </span>
+                          <span className={`h-px flex-1 ${styles.divider.split(' ')[0]}`} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          {STUDY_PROGRAMS[program].years.map(optionYear => {
+                            const isSelected = year === optionYear && programCode === program;
+                            const label = `${optionYear} Year ${STUDY_PROGRAMS[program].label}`;
+                            return (
+                              <Button
+                                key={`${program}:${optionYear}`}
+                                variant="outline"
+                                aria-pressed={isSelected}
+                                className={`min-h-12 rounded-xl border px-3 py-2 text-xs font-bold shadow-none sm:text-sm ${isSelected ? styles.selected : styles.idle}`}
+                                onClick={() => {
+                                  setPendingYearSelection({ year: optionYear, label, programCode: program });
+                                  setShowYearPicker(false);
+                                }}
+                              >
+                                {optionYear} Year
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(pendingYearSelection)} onOpenChange={(open) => { if (!open) setPendingYearSelection(null); }}>
+        <DialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-3xl border-border/60 p-6">
+          <DialogHeader>
+            <DialogTitle className="brand-display text-xl font-extrabold tracking-[-0.035em]">Confirm study <span className="text-teal-600 dark:text-teal-300">year</span></DialogTitle>
+            <DialogDescription>
+              Continue with <span className="font-bold text-foreground">{pendingYearSelection?.label}</span>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 flex gap-3">
+            <Button type="button" variant="ghost" className="h-12 flex-1 rounded-xl" onClick={() => setPendingYearSelection(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="h-12 flex-1 rounded-xl font-bold"
+              disabled={saving}
+              onClick={handleConfirmYearSelection}
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirm'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Gamepad2, Trophy, Timer, CheckCircle2, XCircle, ArrowRight, Flame, Check, Sparkles } from 'lucide-react';
+import { Gamepad2, Trophy, Timer, CheckCircle2, XCircle, ArrowRight, Check, Sparkles, Info } from 'lucide-react';
 import { fetchSubjects, fetchChaptersBySubject, fetchMCQsByChapter, MCQ } from '@/utils/mcqData';
 import { fetchCloudContent } from '@/utils/cloudContent';
 import { BottomSheet } from '@/components/ui/bottom-sheet';
@@ -267,6 +267,7 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isPastWinnersOpen, setIsPastWinnersOpen] = useState<boolean>(false);
+  const [isRulesOpen, setIsRulesOpen] = useState<boolean>(false);
   const [isAttemptedToday, setIsAttemptedToday] = useState<boolean>(false);
   const [selectedMCQ, setSelectedMCQ] = useState<PulseMCQ | null>(null);
   const [formattedOptions, setFormattedOptions] = useState<string[]>([]);
@@ -397,6 +398,9 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
           if (fetchedWinners.length > 0 && !fetchedWinner) {
             fetchedWinner = fetchedWinners[0];
           }
+          if (fetchedLeaders.length > 0 && !fetchedLeader) {
+            fetchedLeader = fetchedLeaders[0];
+          }
           if (fetchedLeaders.length === 0 && fetchedLeader) {
             fetchedLeaders = [fetchedLeader];
           }
@@ -480,7 +484,10 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
     time_taken: `${responseTime.toFixed(1)}s`
   } : baseTodayLeader;
 
-  const currentDisplayWinner: PulseLeader | null = !isAttemptedToday ? prevWinner : activeTodayLeader;
+  const currentDisplayWinnerIsToday = !isAttemptedToday && Boolean(baseTodayLeader);
+  const currentDisplayWinner: PulseLeader | null = !isAttemptedToday
+    ? (baseTodayLeader || prevWinner)
+    : activeTodayLeader;
   const topLeadersList: PulseLeader[] = isAttemptedToday && cloudTodayLeaders.length > 0 
     ? cloudTodayLeaders 
     : (currentDisplayWinner ? [currentDisplayWinner] : []);
@@ -607,11 +614,11 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
           </div>
         )}
 
-        {/* Yesterday's Winner Overlay (Only shown before attempt if winner exists) */}
+        {/* Current cycle leader, or yesterday's winner if nobody has led today yet. */}
         {!isAttemptedToday && currentDisplayWinner && (
           <div className="absolute top-3.5 right-4 text-right z-10 pointer-events-none drop-shadow-md">
             <span className="block text-[9px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              Yesterday's Winner 🏆
+              {currentDisplayWinnerIsToday ? "Today's Leader ⚡" : "Yesterday's Winner 🏆"}
             </span>
             <span className="block text-xs sm:text-sm font-black text-foreground truncate max-w-[150px]">
               {currentDisplayWinner.full_name}
@@ -648,15 +655,23 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="min-w-0 flex-1 pr-2 sm:pr-4">
             {!isAttemptedToday && (
-              <h3 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent drop-shadow-xs">
-                Daily Medmacs Pulse
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 bg-clip-text text-transparent drop-shadow-xs">
+                  Daily Medmacs Pulse
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setIsRulesOpen(true)}
+                  aria-label="Daily game rules and information"
+                  className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-600 transition-colors hover:bg-amber-500/20 dark:text-amber-400"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </div>
             )}
 
             {!isAttemptedToday ? (
-              <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed font-medium">
-                A random MCQ will be selected from each year. Refreshes 3:00 PM PKT daily.
-              </p>
+              null
             ) : (
               /* Left-Side Today's Top 3 Leaders (1st in prominent shining font, 2nd & 3rd in smaller font) */
               topLeadersList.length > 0 ? (
@@ -748,9 +763,7 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
                   </div>
                 )
               ) : (
-                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-amber-600/90 dark:text-amber-400/90 font-bold">
-                  <Flame className="h-4 w-4 text-amber-500 animate-pulse" /> Same question for all Year {yearKey} students
-                </div>
+                null
               )}
 
               {cloudPrevWinners.length > 0 && (
@@ -978,6 +991,25 @@ export function DailyMedmacsPulseCard({ profile, isOfflineMode }: DailyMedmacsPu
             )}
           </div>
         )}
+      </BottomSheet>
+
+      <BottomSheet
+        open={isRulesOpen}
+        onClose={() => setIsRulesOpen(false)}
+        eyebrow="Daily Game"
+        title="How to play"
+        description="Daily Medmacs Pulse rules and schedule."
+        media={
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-500">
+            <Info className="h-5 w-5" />
+          </div>
+        }
+      >
+        <div className="space-y-3 pt-2 text-sm leading-relaxed text-muted-foreground">
+          <p>Answer the daily MCQ as quickly and accurately as you can. Your response time is recorded when you submit your answer.</p>
+          <p>Correct answers are ranked by response time on the daily leaderboard. You can submit one answer per daily game cycle.</p>
+          <p>The game refreshes every day at <strong className="font-bold text-foreground">3:00 PM Pakistan time</strong>. Past winners are available from the game card.</p>
+        </div>
       </BottomSheet>
     </>
   );

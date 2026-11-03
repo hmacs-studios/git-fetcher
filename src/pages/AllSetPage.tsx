@@ -20,8 +20,8 @@ const AllSetPage = () => {
         <Sparkles className="absolute top-0 right-0 w-8 h-8 text-yellow-400 animate-pulse" style={{ transform: 'rotate(20deg)' }} />
         <Sparkles className="absolute bottom-0 left-0 w-6 h-6 text-blue-400 animate-pulse-slow" style={{ transform: 'rotate(-30deg)' }} />
       </div>
-      <h1 className="font-['Syne'] text-5xl font-extrabold leading-tight tracking-[-.06em] text-slate-950 md:text-6xl">
-        You're All Set!
+      <h1 className="font-['Bricolage_Grotesque'] text-5xl font-extrabold leading-tight tracking-[-.06em] text-slate-950 md:text-6xl">
+        You're All <span className="text-teal-600">Set!</span>
       </h1>
       <p className="mx-auto mb-8 max-w-2xl text-lg text-slate-600 md:text-xl">
         Your profile is complete, and you're ready to dive into Medmacs.

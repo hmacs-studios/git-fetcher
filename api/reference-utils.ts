@@ -18,8 +18,12 @@ export interface ReferenceChunk {
   [key: string]: any;
 }
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pxjvltgarzvoptdfdkxq.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_RVLZ7IetJ-w7raWeYGWa5A_5wV4g5rI';
+const MEDMACS_SUPABASE_URL = 'https://ssmmquedryomwxccaqqb.supabase.co';
+const SUPABASE_URL = (process.env.SUPABASE_URL || MEDMACS_SUPABASE_URL).replace(/\/+$/, '');
+if (SUPABASE_URL !== MEDMACS_SUPABASE_URL) {
+  throw new Error('SUPABASE_URL must point to the Medmacs Supabase project.');
+}
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_GkYgPdKV2U51Dd6Wo3AeLQ_nuyW-PIH';
 const OCI_SECRET_KEY = process.env.MEDMACS_OCI_SECRET_KEY?.trim();
 const getPrimaryUrl = () => {
   const configuredUrl = process.env.REFERENCE_API_URL?.trim();

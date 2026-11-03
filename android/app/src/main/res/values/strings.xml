@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Medmacs App</string>
-    <string name="title_activity_main">Medmacs App</string>
+    <string name="app_name">Medmacs</string>
+    <string name="title_activity_main">Medmacs</string>
     <string name="facebook_app_id">880589871013453</string>
     <string name="facebook_client_token">178fbea85e963cb3a089aafdc3b5f54f</string>
 

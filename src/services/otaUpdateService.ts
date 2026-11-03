@@ -39,17 +39,24 @@ type OtaLatestResponse =
     };
 
 const OTA_CHANNEL = import.meta.env.VITE_OTA_CHANNEL || 'production';
+const OTA_DISABLED = import.meta.env.DEV || import.meta.env.VITE_DISABLE_OTA === 'true';
 const MEDMACS_API_BASE_URL = (import.meta.env.VITE_MEDMACS_API_BASE_URL || 'https://admin.medmacs.app').replace(/\/+$/, '');
 const INSTALL_ID_KEY = 'medmacs_ota_install_id';
 const FAILED_VERSIONS_KEY = 'medmacs_ota_failed_versions';
 const INSTALLING_VERSION_KEY = 'medmacs_ota_installing_version';
 const COMPLETED_VERSION_KEY = 'medmacs_ota_completed_version';
+const STAGED_VERSION_KEY = 'medmacs_ota_staged_version';
 const OTA_DIAGNOSTICS_KEY = 'medmacs_ota_diagnostics';
 
-let currentState: OtaUpdateState = { phase: 'idle', progress: 0 };
+let currentState: OtaUpdateState = !OTA_DISABLED && Capacitor.isNativePlatform()
+  ? { phase: 'checking', progress: 0 }
+  : { phase: 'idle', progress: 0 };
 let started = false;
 let appReadyPromise: Promise<void> | null = null;
 let pendingUpdate: PendingUpdate | null = null;
+let checkInFlight = false;
+let lastCheckAt = 0;
+let silentDownloadInFlight = false;
 const listeners = new Set<(state: OtaUpdateState) => void>();
 
 const emit = (state: OtaUpdateState) => {
@@ -243,6 +250,35 @@ export const startOtaDownload = async () => {
   }
 };
 
+// An update discovered after launch should not interrupt the current session.
+// `next` activates it on background/restart; a fresh launch still uses the
+// existing mandatory blocking flow if the staged bundle did not activate.
+const stageMandatoryUpdate = async (update: PendingUpdate) => {
+  if (silentDownloadInFlight || localStorage.getItem(STAGED_VERSION_KEY) === update.version) return;
+  silentDownloadInFlight = true;
+  try {
+    recordDiagnostic('background_download_start', { version: update.version });
+    const bundle = await CapacitorUpdater.download({
+      version: update.version,
+      url: update.url,
+      checksum: update.checksum ?? undefined,
+    });
+    await CapacitorUpdater.next({ id: bundle.id });
+    localStorage.setItem(STAGED_VERSION_KEY, update.version);
+    recordDiagnostic('background_update_staged', { version: update.version, id: bundle.id });
+    pendingUpdate = null;
+    emit({ phase: 'idle', progress: 0 });
+  } catch (error) {
+    recordDiagnostic('background_update_failed', {
+      version: update.version,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    console.error('Background OTA update failed:', error);
+  } finally {
+    silentDownloadInFlight = false;
+  }
+};
+
 export const getOtaDiagnostics = () => {
   try {
     const existing = JSON.parse(localStorage.getItem(OTA_DIAGNOSTICS_KEY) || '[]');
@@ -257,7 +293,7 @@ export const clearOtaDiagnostics = () => {
 };
 
 export const markOtaBundleReady = () => {
-  if (!Capacitor.isNativePlatform()) return Promise.resolve();
+  if (OTA_DISABLED || !Capacitor.isNativePlatform()) return Promise.resolve();
   if (!appReadyPromise) {
     recordDiagnostic('notify_app_ready_start');
     appReadyPromise = CapacitorUpdater.notifyAppReady()
@@ -277,15 +313,16 @@ export const markOtaBundleReady = () => {
   return appReadyPromise;
 };
 
-export const initializeOtaUpdates = async () => {
-  if (started || !Capacitor.isNativePlatform()) return;
-  started = true;
-
-  await markOtaBundleReady();
-
+const checkForOtaUpdates = async (afterLaunch: boolean) => {
+  if (checkInFlight || silentDownloadInFlight ||
+      (afterLaunch && Date.now() - lastCheckAt < 15 * 60 * 1000)) return;
+  // Do not replace a visible update flow or race its download.
+  if (afterLaunch && currentState.phase !== 'idle') return;
+  checkInFlight = true;
+  lastCheckAt = Date.now();
   try {
-    recordDiagnostic('check_start');
-    emit({ phase: 'checking', progress: 0, message: 'Checking for new features...' });
+    recordDiagnostic('check_start', { afterLaunch });
+    if (!afterLaunch) emit({ phase: 'checking', progress: 0, message: 'Checking for new features...' });
 
     const appInfo = await App.getInfo();
     const nativeVersionCode = parseVersionCode(appInfo.build);
@@ -317,24 +354,32 @@ export const initializeOtaUpdates = async () => {
         failedVersion,
       });
       rememberFailedVersion(failedVersion);
+      localStorage.removeItem(STAGED_VERSION_KEY);
       localStorage.removeItem(INSTALLING_VERSION_KEY);
       localStorage.removeItem(COMPLETED_VERSION_KEY);
       CapacitorUpdater.delete({ id: failedUpdate.bundle.id }).catch(error => {
         console.warn('OTA failed bundle cleanup skipped:', error);
       });
-      emit({
-        phase: 'failed',
-        progress: 0,
-        version: failedVersion,
-        message: 'Update failed and was rolled back. We will wait for a newer update before trying again.',
-      });
+      if (!afterLaunch) {
+        emit({
+          phase: 'failed',
+          progress: 0,
+          version: failedVersion,
+          message: 'Update failed and was rolled back. We will wait for a newer update before trying again.',
+        });
+      }
     } else {
       const completedBeforeCheck = clearInstallingVersionIfCurrent(currentBundleVersion, currentBundle.bundle?.id);
       if (completedBeforeCheck) {
+        localStorage.removeItem(STAGED_VERSION_KEY);
         pendingUpdate = null;
         return;
       }
     }
+
+    // A staged update belongs to the previous session. If it did not activate,
+    // this cold start must follow the original mandatory prompt and block access.
+    if (!afterLaunch) localStorage.removeItem(STAGED_VERSION_KEY);
 
     const effectiveVersion = completedVersion || currentBundleVersion;
     const failedBundleVersions = readJsonArray(FAILED_VERSIONS_KEY);
@@ -379,12 +424,14 @@ export const initializeOtaUpdates = async () => {
         version: data.version,
         failedBundleVersions,
       });
-      emit({
-        phase: 'failed',
-        progress: 0,
-        version: data.version,
-        message: 'This update already failed on this device. We will wait for a newer update before trying again.',
-      });
+      if (!afterLaunch) {
+        emit({
+          phase: 'failed',
+          progress: 0,
+          version: data.version,
+          message: 'This update already failed on this device. We will wait for a newer update before trying again.',
+        });
+      }
       return;
     }
 
@@ -395,6 +442,11 @@ export const initializeOtaUpdates = async () => {
         completedVersion,
       });
       emit({ phase: 'idle', progress: 0 });
+      return;
+    }
+
+    if (afterLaunch && localStorage.getItem(STAGED_VERSION_KEY) === data.version) {
+      recordDiagnostic('skip_staged_version', { version: data.version });
       return;
     }
 
@@ -417,6 +469,11 @@ export const initializeOtaUpdates = async () => {
       mandatory: data.mandatory,
       size: updateSize,
     });
+
+    if (afterLaunch && pendingUpdate.mandatory) {
+      await stageMandatoryUpdate(pendingUpdate);
+      return;
+    }
 
     emit({
       phase: 'available',
@@ -444,7 +501,28 @@ export const initializeOtaUpdates = async () => {
       return;
     }
 
-    pendingUpdate = null;
-    emit({ phase: 'idle', progress: 0 });
+    if (!afterLaunch) {
+      pendingUpdate = null;
+      emit({ phase: 'idle', progress: 0 });
+    }
+  } finally {
+    checkInFlight = false;
   }
+};
+
+export const initializeOtaUpdates = async () => {
+  if (OTA_DISABLED || started || !Capacitor.isNativePlatform()) return;
+  started = true;
+
+  await markOtaBundleReady();
+  await checkForOtaUpdates(false);
+
+  // Keep checking while the app is open, and on return from the background.
+  // The first check above keeps the original first-boot update gate intact.
+  void App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive) void checkForOtaUpdates(true);
+  }).catch(error => console.warn('OTA app state listener failed:', error));
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') void checkForOtaUpdates(true);
+  }, 30 * 60 * 1000);
 };

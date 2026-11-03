@@ -195,7 +195,7 @@ const TeachingAmbassadors = () => {
         <div className="min-h-screen w-full bg-white dark:bg-gray-900 mb-[calc(45px+env(safe-area-inset-top))] overscroll-y-contain">
             <Seo
                 title="Teaching Ambassadors"
-                description="Become a Teaching Ambassador at Medmacs App. Inspire and educate the next generation of medical professionals."
+                description="Become a Teaching Ambassador at Medmacs. Inspire and educate the next generation of medical professionals."
                 canonical="https://medmacs.app/teaching-career"
                 />
 

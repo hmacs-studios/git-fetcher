@@ -50,7 +50,7 @@ export function OtaUpdateSheet() {
               <Download className="h-6 w-6" />
             </div>
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Medmacs</p>
-            <SheetTitle className="text-2xl font-extrabold tracking-tight brand-syne">
+            <SheetTitle className="text-2xl font-extrabold tracking-tight brand-display">
               Update Available
             </SheetTitle>
             <SheetDescription>

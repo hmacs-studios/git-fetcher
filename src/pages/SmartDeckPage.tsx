@@ -15,7 +15,7 @@ const SmartDeckPage = () => {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-background text-foreground overflow-hidden">
-      <Seo title="Smart Deck" description="Repair your weakest MCQ chapter with flashcards and correction practice on Medmacs App." canonical="https://medmacs.app/smart-deck" />
+      <Seo title="Smart Deck" description="Repair your weakest MCQ chapter with flashcards and correction practice on Medmacs." canonical="https://medmacs.app/smart-deck" />
 
       {/* Mesh Background Blurs */}
       <div className="pointer-events-none absolute inset-0 bg-mesh opacity-90" />
@@ -23,23 +23,10 @@ const SmartDeckPage = () => {
 
       {/* Glassmorphic Header */}
       <header className="shrink-0 relative z-30 px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+10px)] backdrop-blur-2xl border-b border-border/60 bg-background/88 animate-fade-in">
-        <div className="mx-auto flex items-center justify-between gap-3 max-w-4xl">
-          <Link
-            to="/dashboard"
-            aria-label="Back to dashboard"
-            className="flex shrink-0 items-center justify-center bg-muted text-foreground transition active:scale-95 active:bg-primary active:text-primary-foreground h-11 w-11 rounded-2xl border border-border/40"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-
-          <div className="min-w-0 text-center">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-primary">Medmacs</p>
-            <h1 className="truncate text-base font-black tracking-tight uppercase italic">Smart Deck</h1>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-center bg-primary/10 text-primary h-11 w-11 rounded-2xl">
-            <FlaskConical className="h-5 w-5" />
-          </div>
+        <div className="mx-auto grid max-w-4xl grid-cols-[1fr_auto_1fr] items-center">
+          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Medmacs" className="h-9 w-9 object-contain" />
+          <h1 className="brand-wordmark text-xl text-foreground">Smart Deck</h1>
+          <div aria-hidden="true" />
         </div>
       </header>
 
@@ -178,7 +165,7 @@ const SmartDeckPage = () => {
           )}
           
           <p className="pb-4 pt-8 text-center text-[10px] text-muted-foreground tracking-widest">
-            © 2026 Medmacs App • All rights reserved
+            © 2026 Medmacs • All rights reserved
           </p>
         </div>
       </main>

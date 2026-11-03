@@ -46,6 +46,7 @@ type AnalyticsAnswer = {
       subjects: {
         name: string;
         year: string | null;
+        program_code: string | null;
       } | null;
     } | null;
   } | null;
@@ -181,7 +182,7 @@ export function useDashboardAnalyticsPlan({
     const [answersResult, savedResult, testsResult, battlesResult] = await Promise.all([
       supabase
         .from('user_answers')
-        .select('is_correct, time_taken, created_at, mcqs(id, chapter_id, chapters(id, name, subjects(id, name, year)))')
+        .select('is_correct, time_taken, created_at, mcqs(id, chapter_id, chapters(id, name, subjects(id, name, year, program_code)))')
         .eq('user_id', userId)
         .gte('created_at', thirtyDaysAgo),
       supabase.from('saved_mcqs').select('*', { count: 'exact', head: true }).eq('user_id', userId),
@@ -195,6 +196,7 @@ export function useDashboardAnalyticsPlan({
       const subject = answer.mcqs?.chapters?.subjects;
       const subjectName = subject?.name || 'Unknown Subject';
       if (profile?.year && subject?.year && subject.year !== profile.year) return;
+      if ((subject?.program_code || 'mbbs') !== (profile?.program_code || 'mbbs')) return;
       const row = subjectMap.get(subjectName) || {
         subject: subjectName,
         total: 0,
@@ -247,7 +249,7 @@ export function useDashboardAnalyticsPlan({
       },
       subjects,
     };
-  }, [profile?.institute, profile?.year, rawUserPlan, userId]);
+  }, [profile?.institute, profile?.program_code, profile?.year, rawUserPlan, userId]);
 
   const requestAnalyticsPlan = useCallback(async () => {
     if (!userId || analyticsPlanLoading) return;

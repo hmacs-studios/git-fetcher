@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+
+  <!-- Primary Meta Tags -->
+  <title>Medmacs | Learn MBBS with AI</title>
+  <meta name="description" content="Pakistan&#39;s most advanced MBBS Learning platform">
+  <meta name="author" content="Medmacs Team" />
+  <link rel="icon" type="image/png" href="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://medmacs.app" />
+  <meta property="og:image" content="https://i.postimg.cc/W4m0SDHK/medmacs-poster.png">
+  <meta property="og:title" content="Medmacs | Learn MBBS with AI">
+  <meta property="og:description" content="Pakistan&#39;s most advanced MBBS Learning platform">
+  
+  <!-- Twitter -->
+  <meta name="twitter:title" content="Medmacs | Learn MBBS with AI">
+  <meta name="twitter:description" content="Pakistan&#39;s most advanced MBBS Learning platform">
+  <meta name="twitter:image" content="https://i.postimg.cc/W4m0SDHK/medmacs-poster.png">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <!-- Google -->
+  <meta name="google-site-verification" content="SDjLEe19M7YsNCP-xWK1xUzF6KpweQjyQvyuu2FpNeg" />
+  <meta name="google-adsense-account" content="ca-pub-6598630908522266" />
+
+  <!-- PWA / Manifest -->
+  <link rel="manifest" href="/assets/manifest-DfVBl14h.json" />
+  <meta name="theme-color" content="#4f46e5" />
+  <link rel="apple-touch-icon" href="./icons/icon-192x192.png" />
+  <script>
+    if (!Promise.allSettled) {
+      Promise.allSettled = function (promises) {
+        return Promise.all(Array.prototype.map.call(promises, function (promise) {
+          return Promise.resolve(promise).then(
+            function (value) { return { status: 'fulfilled', value: value }; },
+            function (reason) { return { status: 'rejected', reason: reason }; }
+          );
+        }));
+      };
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Fredoka:wght@400;500;600;700&family=Nothing+You+Could+Do&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+    }
+
+    .splash-logo {
+      width: 64px;
+      height: 64px;
+    }
+
+    .splash-footer {
+      position: absolute;
+      bottom: 32px;
+      text-align: center;
+      color: #666;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .splash-footer p {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    #root:not(:empty) + #splash-screen {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease-out, visibility 0.3s;
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/index-SKkfIv-G.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/commonjs-Cpj98o6Y.js">
+  <link rel="modulepreload" crossorigin href="/assets/react-vendor--CgM7R3s.js">
+  <link rel="modulepreload" crossorigin href="/assets/capacitor-MBChqShc.js">
+  <link rel="modulepreload" crossorigin href="/assets/query-DIFTfD2A.js">
+  <link rel="modulepreload" crossorigin href="/assets/supabase-BkQ1WA2k.js">
+  <link rel="modulepreload" crossorigin href="/assets/ui-vendor-CbK4XRml.js">
+  <link rel="modulepreload" crossorigin href="/assets/motion-DKYyQvtj.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-CSIIfZmE.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <div id="splash-screen">
+    <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Logo" class="splash-logo" />
+    <div class="splash-footer">
+      <p>Medmacs</p>
+    </div>
+  </div>
+
+  <script>
+    // Hide splash screen when React app is mounted
+    const observer = new MutationObserver((mutations) => {
+      const root = document.getElementById('root');
+      if (root && root.children.length > 0) {
+        const splash = document.getElementById('splash-screen');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => {
+            splash.style.display = 'none';
+          }, 500);
+          observer.disconnect();
+        }
+      }
+    });
+    observer.observe(document.getElementById('root'), { childList: true });
+  </script>
+
+  <!-- Scripts -->
+  <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
+  <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+
+  <!-- Schema.org Structured Data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Medmacs",
+      "url": "https://medmacs.app",
+      "logo": "https://medmacs.app/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png",
+      "description": "Pakistan’s Most Advanced AI-Powered MBBS Learning Platform. Featuring adaptive MCQs, real-time testing, personalized learning paths and national leaderboard.",
+      "applicationCategory": "EducationalApplication",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0.00",
+        "priceCurrency": "PKR"
+      },
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "email": "hi@medmacs.app",
+        "contactType": "customer support"
+      },
+      "sameAs": [
+        "https://www.facebook.com/medmacspk",
+        "https://www.instagram.com/medmacs.app",
+        "https://www.linkedin.com/in/dr-ameerhamza/"
+      ]
+    }
+    </script>
+</body>
+
+</html>

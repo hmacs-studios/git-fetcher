@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -136,21 +136,13 @@ export default function Welcome() {
   const [currentStep, setCurrentStep] = useState(0);
   const navigate = useNavigate();
 
-  const welcomeMascot = useMemo(() => {
-    const avatars = ["Mascot2", "Mascot9", "Mascot10", "Mascot13", "Mascot14"];
-    return `/mascots/${avatars[Math.floor(Math.random() * avatars.length)]}.png`;
-  }, []);
-
   useEffect(() => {
     async function checkState() {
-      const hasSeenWizard = localStorage.getItem(WIZARD_SEEN_KEY);
       const { data } = await supabase.auth.getSession();
       const userExists = !!data?.session;
       setIsLoggedIn(userExists);
 
-      if (!hasSeenWizard) {
-        setShowWizard(true);
-      } else if (userExists) {
+      if (userExists) {
         navigate("/dashboard", { replace: true });
       }
       setLoading(false);
@@ -172,11 +164,6 @@ export default function Welcome() {
     localStorage.setItem(LEGACY_WIZARD_SEEN_KEY, "true");
     if (isLoggedIn) navigate("/dashboard", { replace: true });
     else setShowWizard(false);
-  };
-
-  const restartWizard = () => {
-    setCurrentStep(0);
-    setShowWizard(true);
   };
 
   if (loading) return <AppTransitionScreen />;
@@ -206,10 +193,7 @@ export default function Welcome() {
                 transition={{ delay: .12, duration: .4 }}
                 className="flex items-center gap-2.5"
               >
-                <span className="font-['Syne'] text-lg font-extrabold tracking-[-.045em]">
-                  <span className="bg-gradient-to-r from-[#2dd4bf] to-[#0ea5e9] bg-clip-text text-transparent">Medmacs</span>
-                  <span className="text-slate-950">.app</span>
-                </span>
+                <span className="brand-wordmark text-xl text-slate-950">Medmacs</span>
               </motion.div>
               <motion.button
                 initial={{ opacity: 0, x: 10 }}
@@ -238,18 +222,17 @@ export default function Welcome() {
                       initial={{ opacity: 0, y: 18, filter: "blur(8px)" }}
                       animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                       transition={{ duration: .6, ease: [0.22, 1, 0.36, 1] }}
-                      className="mx-auto mt-auto w-full max-w-[min(360px,calc(100vw-48px))] text-center font-['Syne'] font-extrabold leading-[1.02]"
+                      className="mx-auto mt-auto w-full max-w-[min(360px,calc(100vw-48px))] text-center font-['Bricolage_Grotesque'] font-extrabold leading-[1.02]"
                     >
                       <span className="mx-auto block w-fit text-[clamp(1.9rem,8vw,2.65rem)] tracking-[-.045em] text-slate-950">Welcome to</span>
                       <span className="mx-auto mt-2 block w-fit max-w-full whitespace-nowrap text-[clamp(1.65rem,7.2vw,2.2rem)] tracking-[-.065em]">
                         <motion.span
-                          className="inline-block bg-[linear-gradient(90deg,#2dd4bf,#0ea5e9,#22d3ee,#2dd4bf)] bg-[length:220%_100%] bg-clip-text text-transparent"
+                          className="brand-wordmark inline-block text-[1.18em] text-slate-950"
                           animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                           transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
                         >
                           Medmacs
                         </motion.span>
-                        <span className="text-slate-950">.app</span>
                       </span>
                     </motion.h1>
                     <motion.button
@@ -277,7 +260,7 @@ export default function Welcome() {
                     initial={{ opacity: 0, y: 18, scale: .94, filter: "blur(8px)" }}
                     animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
                     transition={{ delay: .16, duration: .5, ease: "easeOut" }}
-                    className="font-['Syne'] text-[clamp(1.7rem,6.4vw,2.2rem)] font-extrabold leading-[1.02] tracking-[-.05em] text-slate-950"
+                    className="font-['Bricolage_Grotesque'] text-[clamp(1.7rem,6.4vw,2.2rem)] font-extrabold leading-[1.02] tracking-[-.05em] text-slate-950"
                   >
                     {STEPS[currentStep].title}
                   </motion.h1>
@@ -352,39 +335,39 @@ export default function Welcome() {
           }}
           className="fixed inset-0 flex flex-col items-center justify-center overflow-hidden overscroll-none bg-white text-slate-950"
         >
-          {/* Help/Revisit Button */}
-          <button
-            onClick={restartWizard}
-            className="absolute right-8 top-8 z-50 p-2 text-slate-300 transition-colors hover:text-teal-500"
-            title="Revisit App Tour"
-          >
-            <HelpCircle className="w-7 h-7" />
-          </button>
-
           <div
             className="relative z-10 flex min-h-0 w-full max-w-md flex-1 flex-col items-center px-5 pt-[max(18px,env(safe-area-inset-top))]"
             style={{ paddingBottom: BOTTOM_SAFE_CLEARANCE }}
           >
-            <motion.img
-              initial={{ y: 20 }} animate={{ y: 0 }}
-              src={welcomeMascot} alt="Mascot" className="mt-auto w-40 h-auto drop-shadow-2xl animate-[float_4s_ease-in-out_infinite]"
+            <motion.video
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              src="/intro.mp4"
+              autoPlay
+              muted
+              playsInline
+              preload="auto"
+              onEnded={(event) => event.currentTarget.pause()}
+              className="mt-auto -mx-[calc(12.5%+1.25rem)] w-[calc(125%+2.5rem)] max-w-none object-contain"
+              aria-label="Medmacs introduction"
             />
             <div className="text-center mt-8">
-              <h1 className="whitespace-nowrap font-['Syne'] text-[clamp(2rem,8vw,2.55rem)] font-extrabold tracking-[-.055em]">
+              <h1 className="flex flex-col items-center font-['Bricolage_Grotesque'] leading-none">
+                <span className="mb-0.5 block font-sans text-base font-medium tracking-normal text-slate-600">Welcome to</span>
                 <motion.span
-                  className="inline-block bg-[linear-gradient(90deg,#2dd4bf,#0ea5e9,#22d3ee,#2dd4bf)] bg-[length:220%_100%] bg-clip-text text-transparent"
+                  className="brand-wordmark inline-block text-[clamp(2.35rem,10vw,3rem)] text-slate-950"
                   animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
                   transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut" }}
                 >
                   Medmacs
                 </motion.span>
-                <span className="text-slate-950">.app</span>
               </h1>
               <p className="mt-2 text-sm font-bold uppercase tracking-widest text-slate-400">Master the Medical Journey</p>
             </div>
             <div className="mt-auto w-full flex flex-col gap-4">
               <button onClick={() => navigate("/signup")} className="w-full py-4 bg-gradient-to-r from-[#2dd4bf] to-[#0ea5e9] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-transform">Create Account</button>
-              <button onClick={() => navigate("/login")} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-4 text-sm font-semibold text-slate-950 shadow-sm transition-transform active:scale-95 sm:text-base">Already have a Medmacs.app account? Login</button>
+              <button onClick={() => navigate("/login")} className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-4 text-sm font-semibold text-slate-950 shadow-sm transition-transform active:scale-95 sm:text-base">Already have a Medmacs account? Login</button>
             </div>
             <p className="mt-4 shrink-0 text-center text-xs text-slate-400">
               A project by <span className="font-semibold text-slate-600">HMACS Studios</span>

@@ -36,8 +36,8 @@ const AI = () => {
       {/* Add the Seo component here */}
       <Seo
         title="AI Study Assistant"
-        description="Leverage Medmacs App's AI Study Assistant for personalized learning, including an AI Chatbot and AI Test Generator for medical exam preparation."
-        canonical="https://www.medistics.app/ai" // Replace with your actual domain if applicable
+        description="Leverage the Medmacs AI Study Assistant for personalized learning, including an AI Chatbot and AI Test Generator for medical exam preparation."
+        canonical="https://medmacs.app/ai" // Replace with your actual domain if applicable
       />
  
 

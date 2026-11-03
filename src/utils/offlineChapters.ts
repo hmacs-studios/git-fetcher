@@ -56,6 +56,7 @@ export type OfflineChapterSummary = {
   chapterNumber: number;
   mcqCount: number;
   downloadedAt: string;
+  contentType?: 'question_bank' | 'past_paper' | null;
 };
 
 type StoredChapter = {
@@ -311,6 +312,7 @@ export const getOfflineChapterSummaries = async (): Promise<OfflineChapterSummar
         chapterNumber: payload.chapter.chapter_number,
         mcqCount: payload.mcqs.length,
         downloadedAt: payload.downloadedAt,
+        contentType: payload.chapter.content_type,
       }))
       .sort((a, b) => a.subjectName.localeCompare(b.subjectName) || a.chapterNumber - b.chapterNumber);
   } catch {

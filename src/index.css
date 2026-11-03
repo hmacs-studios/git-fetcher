@@ -918,9 +918,65 @@ body,
   height: 0 !important;
 }
 
-.brand-syne {
-  font-family: "Syne", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+.brand-display {
+  font-family: "Bricolage Grotesque", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   font-weight: 800;
+}
+
+.brand-wordmark {
+  position: relative;
+  display: inline-block;
+  padding: 0 0.12em 0.22em;
+  font-family: "Nothing You Could Do", cursive;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  text-transform: none;
+}
+
+.brand-wordmark::after {
+  content: "";
+  position: absolute;
+  right: 5%;
+  bottom: 0;
+  left: 15%;
+  height: 0.34em;
+  border-bottom: 0.09em solid hsl(var(--primary));
+  border-radius: 0 0 55% 45%;
+  opacity: 0.9;
+  transform: rotate(-2.5deg);
+  transform-origin: center;
+  pointer-events: none;
+}
+
+/* Carousel artwork stays static on touch devices. Hover polish is enabled
+   only when the device has a real fine pointer, avoiding stuck hover states
+   and unnecessary compositing work while swiping. */
+@media (hover: hover) and (pointer: fine) {
+  .dashboard-carousel-image {
+    transition: transform 450ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .group:hover .dashboard-carousel-image {
+    transform: scale(1.05);
+  }
+
+  .dashboard-carousel-overlay {
+    transition: background-color 220ms ease-out;
+  }
+
+  .group:hover .dashboard-carousel-overlay {
+    background-color: rgb(0 0 0 / 0.3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-carousel-image,
+  .dashboard-carousel-overlay {
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 .dashboard-modern-font {
@@ -931,7 +987,7 @@ body,
 .dashboard-modern-font h2,
 .dashboard-modern-font h3,
 .dashboard-modern-font .dashboard-display-font {
-  font-family: "Sora", "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Bricolage Grotesque", "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Battle mode living background */
@@ -955,7 +1011,7 @@ body,
 }
 
 .font-rounded {
-  font-family: 'Quicksand', 'Fredoka', 'Sora', system-ui, sans-serif !important;
+  font-family: 'Quicksand', 'Fredoka', 'Bricolage Grotesque', system-ui, sans-serif !important;
 }
 
 @keyframes ambient-wave {
