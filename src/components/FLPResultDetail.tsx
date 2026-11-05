@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import Seo from '@/components/Seo';
 import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { readAttemptData } from '@/utils/flpStorage';
+import { readArchivedAttempt, readAttemptData } from '@/utils/flpStorage';
 import { FLPResultSkeleton } from '@/components/FLPs/FLPResultSkeleton';
 
 interface MCQ {
@@ -38,6 +38,7 @@ interface FLPAttempt {
     question_attempts: QuestionAttempt[];
     test_config_id: string;
     r2_key?: string;
+    review_archived_at?: string | null;
 }
 
 const normalizeAttempts = (attempts: any[]): QuestionAttempt[] => {
@@ -86,15 +87,19 @@ const FLPResultDetail = () => {
                 }
             }
 
-            // R2 storage: store full MCQ data for later use
-            if (data?.r2_key) {
+            if (data?.review_archived_at || data?.r2_key) {
                 try {
-                    const r2Data = await readAttemptData(data.r2_key);
-                    if (r2Data?.mcqs) {
-                        (data as any)._r2_mcqs = r2Data.mcqs;
+                    const review = data.review_archived_at
+                        ? await readArchivedAttempt(data.id)
+                        : await readAttemptData(data.r2_key);
+                    if (review?.attempt_id === data.id) {
+                        if (Array.isArray(review.mcqs)) (data as any)._archived_mcqs = review.mcqs;
+                        if (Array.isArray(review.question_attempts)) {
+                            data.question_attempts = normalizeAttempts(review.question_attempts);
+                        }
                     }
-                } catch {
-                    // R2 failed, will fall back to mcqs table
+                } catch (error) {
+                    console.warn('Could not load the FLP review archive.', error);
                 }
             }
 
@@ -117,13 +122,13 @@ const FLPResultDetail = () => {
         isError: isErrorMcqs,
         error: errorMcqs
     } = useQuery<MCQ[], Error>({
-        queryKey: ['flpMcqsDetail', mcqIds, (flpResult as any)?._r2_mcqs?.length],
+        queryKey: ['flpMcqsDetail', mcqIds, (flpResult as any)?._archived_mcqs?.length],
         queryFn: async () => {
             // R2 storage: use pre-fetched MCQ data when available
             // Validate that MCQs have options arrays — older submissions may have undefined options
-            const r2Mcqs = (flpResult as any)?._r2_mcqs;
-            if (r2Mcqs && Array.isArray(r2Mcqs) && r2Mcqs.length > 0 && r2Mcqs.every((m: any) => Array.isArray(m.options) && m.options.length > 0)) {
-                return r2Mcqs as MCQ[];
+            const archivedMcqs = (flpResult as any)?._archived_mcqs;
+            if (archivedMcqs && Array.isArray(archivedMcqs) && archivedMcqs.length > 0 && archivedMcqs.every((m: any) => Array.isArray(m.options) && m.options.length > 0)) {
+                return archivedMcqs as MCQ[];
             }
 
             // Legacy fallback: fetch from mcqs table
@@ -186,8 +191,8 @@ const FLPResultDetail = () => {
                     <CardContent className="space-y-4">
                         <p className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed">{errorResult?.message}</p>
                         <div className="flex gap-3">
-                            <Link to="/flp-result">
-                                <Button className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl">View All Results</Button>
+                            <Link to="/flp">
+                                <Button className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl">Back to FLP</Button>
                             </Link>
                             <Link to="/dashboard">
                                 <Button variant="outline" className="border-slate-200 dark:border-slate-800 rounded-xl">Dashboard</Button>
@@ -211,8 +216,8 @@ const FLPResultDetail = () => {
                             The requested Full-Length Paper attempt record is missing or expired.
                         </p>
                         <div className="flex gap-3 justify-center">
-                            <Link to="/flp-result">
-                                <Button className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl">View All Results</Button>
+                            <Link to="/flp">
+                                <Button className="bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl">Back to FLP</Button>
                             </Link>
                             <Link to="/dashboard">
                                 <Button variant="outline" className="border-slate-200 dark:border-slate-800 rounded-xl">Dashboard</Button>
@@ -230,7 +235,8 @@ const FLPResultDetail = () => {
         : 0;
     const remarks = getScoreRemark(scorePercentage);
 
-    const correctCount = flpResult?.question_attempts?.filter(a => a.isCorrect).length || 0;
+    const hasReview = Boolean(flpResult.question_attempts?.length);
+    const correctCount = flpResult.question_attempts?.filter(a => a.isCorrect).length ?? flpResult.score;
     const incorrectCount = flpResult?.question_attempts?.filter(a => !a.isCorrect && a.selectedAnswer).length || 0;
     const unattemptedCount = flpResult?.question_attempts?.filter(a => !a.selectedAnswer).length || 0;
 
@@ -266,7 +272,7 @@ const FLPResultDetail = () => {
             {/* Header */}
             <header className="shrink-0 bg-background/88 backdrop-blur-2xl border-b border-border/60 pt-[env(safe-area-inset-top)] z-40">
                 <div className="container mx-auto px-5 h-16 flex justify-between items-center max-w-4xl">
-                    <Link to="/flp-result" className="flex shrink-0 items-center justify-center bg-muted text-foreground transition active:scale-95 h-11 w-11 rounded-2xl border border-border/40">
+                    <Link to="/flp" aria-label="Back to FLP" className="flex shrink-0 items-center justify-center bg-muted text-foreground transition active:scale-95 h-11 w-11 rounded-2xl border border-border/40">
                         <ArrowLeft className="w-5 h-5" />
                     </Link>
                     <div className="min-w-0 text-center">
@@ -343,16 +349,22 @@ const FLPResultDetail = () => {
                                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-500/80">Correct</span>
                             </div>
                             <div className="flex items-center justify-center gap-2 py-1.5 bg-rose-500/5 border border-rose-500/10 rounded-xl">
-                                <span className="text-sm font-black text-rose-500">{incorrectCount}</span>
+                                <span className="text-sm font-black text-rose-500">{hasReview ? incorrectCount : "—"}</span>
                                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-rose-500/80">Incorrect</span>
                             </div>
                             <div className="flex items-center justify-center gap-2 py-1.5 bg-slate-500/5 border border-border/20 rounded-xl">
-                                <span className="text-sm font-black text-muted-foreground">{unattemptedCount}</span>
+                                <span className="text-sm font-black text-muted-foreground">{hasReview ? unattemptedCount : "—"}</span>
                                 <span className="text-[9px] font-extrabold uppercase tracking-wider text-muted-foreground">Skipped</span>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                {!hasReview && (
+                    <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">
+                        The score is saved. The question-by-question review is currently unavailable.
+                    </p>
+                )}
 
                 {/* Filter Tabs (Horizontal Underline styling, scrollable on mobile) */}
                 <div className="flex gap-6 border-b border-border/50 overflow-x-auto no-scrollbar scroll-smooth shrink-0" aria-label="Filter results">

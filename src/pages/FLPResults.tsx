@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { useFlpAttempts } from '@/hooks/useFlpAttempts';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,40 +8,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import Seo from '@/components/Seo';
 
-interface FLPResultSummary {
-    id: string;
-    score: number;
-    total_questions: number;
-    completed_at: string;
-    username?: string;
-}
-
 const FLPResultsPage = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
 
-    const { data: flpResults, isLoading: isLoadingResults } = useQuery<FLPResultSummary[], Error>({
-        queryKey: ['flpResults', user?.id],
-        queryFn: async () => {
-            if (!user?.id) {
-                return [];
-            }
-
-            const { data, error } = await supabase
-                .from('flp_user_attempts')
-                .select('id, score, total_questions, completed_at, username')
-                .eq('user_id', user.id)
-                .order('completed_at', { ascending: false });
-
-            if (error) {
-                throw new Error(`Error fetching results: ${error.message}`);
-            }
-
-            return data || [];
-        },
-        enabled: !!user?.id,
-        staleTime: 5 * 60 * 1000,
-    });
+    const { data: flpResults, isLoading: isLoadingResults } = useFlpAttempts(user?.id);
 
     const getScoreRemark = (percentage: number) => {
         if (percentage >= 90) {
