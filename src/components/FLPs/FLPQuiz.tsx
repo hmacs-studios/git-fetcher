@@ -1,3 +1,5 @@
+import { FlpQuizLoading } from '@/components/FLPs/FlpQuizLoading';
+import { saveFlpDraft } from '@/utils/flpSession';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -9,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { notifyAchievementProgress } from '@/components/profile/AchievementBadges';
-import { writeAttemptData } from '@/utils/flpStorage';
+import { matchesArchivedAttempt, readArchivedAttempt, writeAttemptData } from '@/utils/flpStorage';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -21,7 +23,7 @@ interface MCQ {
   question: string;
   options: string[];
   correct_answer: string;
-  explanation: string;
+  explanation?: string;
   chapter_id: string;
 }
 
@@ -46,6 +48,7 @@ interface FLPQuizProps {
   initialAnswers?: Record<string, string | null>;
   initialTimeLeft?: number;
   sessionId?: string;
+  deadline?: number;
 }
 
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -69,7 +72,7 @@ interface FLPSessionData {
   savedAt: number;
 }
 
-export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, initialIndex, initialAnswers, initialTimeLeft, sessionId }: FLPQuizProps) => {
+export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, initialIndex, initialAnswers, initialTimeLeft, sessionId, deadline }: FLPQuizProps) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -93,6 +96,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
   const isSubmittingRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isInitializedRef = useRef(false);
+  const displayedDeadline = useRef(deadline);
 
   const totalQuestions = shuffledMcqs.length;
   const totalTestTime = totalQuestions * timePerQuestion;
@@ -139,13 +143,6 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
     setIsSubmitting(true);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    // Clear localStorage immediately to prevent the save effect from re-writing it
-    try {
-      localStorage.removeItem(FLP_STORAGE_KEY);
-    } catch (e) {
-      console.error("Failed to clear FLP session", e);
-    }
-
     let finalScore = 0;
     const questionsAttemptDetails: QuizResultForDb[] = [];
     shuffledMcqs.forEach(mcq => {
@@ -168,6 +165,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
             status: 'completed'
           })
           .eq('id', sessionId)
+          .eq('user_id', user.id)
           .select('id');
         if (updateError) throw updateError;
         if (!updatedRows || updatedRows.length === 0) {
@@ -179,20 +177,12 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
         if (insertError) throw insertError;
         activeResultId = (insertedResult as any).id;
 
-        const { data: attempts } = await (supabase as any)
-          .from('flp_user_attempts')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('test_config_id', flpTestConfigId)
-          .order('completed_at', { ascending: false });
+      }
 
-        if (attempts && attempts.length > 10) {
-          const idsToDelete = attempts.slice(10).map((a: any) => a.id);
-          await (supabase as any)
-            .from('flp_user_attempts')
-            .delete()
-            .in('id', idsToDelete);
-        }
+      try {
+        localStorage.removeItem(FLP_STORAGE_KEY);
+      } catch (error) {
+        console.warn('Could not clear the saved FLP session.', error);
       }
 
       const { data: profileBadges } = await (supabase as any).from('profiles').select('badges').eq('id', user.id).maybeSingle();
@@ -213,38 +203,38 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
         .eq('id', user.id);
       notifyAchievementProgress('flp_completed');
 
-      // Build an options lookup from the original mcqs prop (which has the `options` field)
-      // ShuffledMCQ omits `options` and uses `shuffledOptions` instead, so we need the originals
-      const originalMcqMap = new Map(mcqs.map(m => [m.id, m]));
-
-      // Write full MCQ data to R2 for result detail page
       try {
-        const r2Key = await writeAttemptData({
+        const review = {
           attempt_id: activeResultId,
-          mcqs: shuffledMcqs.map(mcq => {
-            const originalMcq = originalMcqMap.get(mcq.id);
-            return {
-              id: mcq.id,
-              question: mcq.question,
-              options: originalMcq?.options || mcq.shuffledOptions,
-              correct_answer: mcq.correct_answer,
-              explanation: mcq.explanation,
-              chapter_id: mcq.chapter_id,
-            };
-          }),
+          mcqs: shuffledMcqs.map(mcq => ({
+            id: mcq.id,
+            question: mcq.question,
+            options: mcq.shuffledOptions,
+            correct_answer: mcq.correct_answer,
+            explanation: mcq.explanation,
+            chapter_id: mcq.chapter_id,
+          })),
           question_attempts: questionsAttemptDetails,
           score: finalScore,
           total_questions: totalQuestions,
-          completed_at: new Date().toISOString(),
-        });
+          completed_at: resultData.completed_at,
+        };
+        await writeAttemptData(review);
+        const archived = await readArchivedAttempt(activeResultId);
+        if (!matchesArchivedAttempt(review, archived)) {
+          throw new Error('Archived review could not be verified.');
+        }
 
-        // Update Supabase with r2_key
-        await (supabase as any)
+        const { error: archiveError } = await (supabase as any)
           .from('flp_user_attempts')
-          .update({ r2_key: r2Key })
-          .eq('id', activeResultId);
-      } catch (r2Err) {
-        console.error('R2 write failed (non-blocking):', r2Err);
+          .update({ review_archived_at: new Date().toISOString(), question_attempts: null })
+          .eq('id', activeResultId)
+          .eq('user_id', user.id)
+          .select('id')
+          .single();
+        if (archiveError) throw archiveError;
+      } catch (error) {
+        console.warn('FLP archive was not finalized. Supabase review data remains available.', error);
       }
 
       setCurrentTestResultId(activeResultId);
@@ -346,7 +336,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
     if (mcqs && mcqs.length > 0 && !isInitializedRef.current) {
       isInitializedRef.current = true;
       const initialShuffled = mcqs.map(mcq => {
-        const shuffledOptions = shuffleArray(mcq.options);
+        const shuffledOptions = sessionId ? mcq.options : shuffleArray(mcq.options);
         const newCorrectIndex = shuffledOptions.indexOf(mcq.correct_answer);
         return { ...mcq, shuffledOptions, originalCorrectIndex: newCorrectIndex };
       });
@@ -366,6 +356,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
         setCurrentQuestionIndex(0);
         const freshTotalTime = initialShuffled.length * timePerQuestion;
         setTotalTimeLeft(freshTotalTime);
+        displayedDeadline.current ??= Date.now() + freshTotalTime * 1000;
       }
     }
   }, [mcqs, timePerQuestion]);
@@ -384,6 +375,18 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
     timerRef.current = setInterval(() => { setTotalTimeLeft(prevTime => prevTime - 1); }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [totalTimeLeft, isQuizEnded, totalQuestions]);
+
+  useEffect(() => {
+    const endsAt = displayedDeadline.current;
+    if (!sessionId || !endsAt || !shuffledMcqs.length || isQuizEnded || isSubmittingRef.current) return;
+    const savedAt = Date.now();
+    void saveFlpDraft({
+      sessionId, subjectName, currentQuestionIndex, userAnswers, deadline: endsAt, savedAt,
+      mcqs: shuffledMcqs.map(({ shuffledOptions, originalCorrectIndex: _index, ...question }) => ({
+        ...question, options: shuffledOptions,
+      })),
+    }).catch(error => console.warn('FLP progress was not synced.', error));
+  }, [sessionId, subjectName, shuffledMcqs, currentQuestionIndex, userAnswers, isQuizEnded]);
 
   useEffect(() => {
     if (shuffledMcqs.length > 0 && !isQuizEnded && !isSubmittingRef.current && user) {
@@ -410,25 +413,17 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
     }
   }, [isRestored, shuffledMcqs.length]);
 
-  if (shuffledMcqs.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F8FAFC] dark:bg-gray-950">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/lovable-uploads/bf69a7f7-550a-45a1-8808-a02fb889f8c5.png" alt="Loading" className="w-16 h-16 animate-pulse" />
-          <p className="text-sm text-muted-foreground font-medium">Preparing your Full-Length Paper...</p>
-        </div>
-      </div>
-    );
-  }
+  if (shuffledMcqs.length === 0) return <FlpQuizLoading />;
 
   const displayUsername = user?.email ? user.email.split('@')[0] : 'User';
 
-  // Question map grid component
-  const QuestionMapGrid = () => (
+  // Keep the buttons mounted when the quiz timer updates.
+  const renderQuestionMap = () => (
     <>
       <div className="grid grid-cols-5 gap-2.5 justify-items-center">
         {shuffledMcqs.map((mcq, index) => (
-          <Button key={mcq.id} variant="outline"
+          <Button key={mcq.id} type="button" variant="outline"
+            aria-current={currentQuestionIndex === index ? 'step' : undefined}
             className={`w-9 h-9 rounded-full p-0 text-xs font-black transition-all ${
               currentQuestionIndex === index
                 ? 'bg-teal-500 text-white border-2 border-teal-500 shadow-md scale-105 hover:bg-teal-600'
@@ -468,11 +463,11 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
                   <PanelLeft className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[300px] p-0 border-r border-border/40 bg-background/80 backdrop-blur-2xl flex flex-col">
+              <SheetContent side="left" overlayClassName="z-[200]" className="z-[201] w-[300px] p-0 border-r border-border/40 bg-background/80 backdrop-blur-2xl flex flex-col">
                 <SheetHeader className="p-6 border-b border-border/40">
                   <SheetTitle className="text-xl font-black italic tracking-tight">Question <span className="text-blue-600">Map</span></SheetTitle>
                 </SheetHeader>
-                <div className="flex-grow overflow-y-auto p-6"><QuestionMapGrid /></div>
+                <div className="min-h-0 flex-grow overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">{renderQuestionMap()}</div>
               </SheetContent>
             </Sheet>
             <div className="flex items-center gap-2">
@@ -509,7 +504,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
               <div className="p-6 border-b border-border/40">
                 <h2 className="text-xs font-black uppercase tracking-[0.3em] text-muted-foreground/60">Practice Navigator</h2>
               </div>
-              <div className="flex-grow overflow-y-auto p-6"><QuestionMapGrid /></div>
+              <div className="min-h-0 flex-grow overflow-y-auto p-6">{renderQuestionMap()}</div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -655,7 +650,7 @@ export const FLPQuiz = ({ mcqs, onFinish, timePerQuestion = 60, subjectName, ini
       </div>
 
       <AlertDialog open={showUnattemptedDialog} onOpenChange={setShowUnattemptedDialog}>
-        <AlertDialogContent className="rounded-[2.5rem] p-8 border-border/40 bg-background/80 backdrop-blur-2xl">
+        <AlertDialogContent className="rounded-[2.5rem] p-8 pb-[calc(2rem+env(safe-area-inset-bottom,0px))] border-border/40 bg-background/80 backdrop-blur-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-black italic tracking-tight">Unattempted <span className="text-red-500">Items</span></AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground font-medium py-2">

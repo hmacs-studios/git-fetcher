@@ -1,3 +1,9 @@
+import { fetchFlpEndpoint, flpEndpoint } from '@/utils/flpEndpoint';
+const archiveUrl = (attemptId: string) => {
+  const url = flpEndpoint('/archive');
+  url.searchParams.set('attemptId', attemptId);
+  return url;
+};
 const FLP_STORAGE_API = 'https://contents.medmacs.app/api/flp-storage';
 
 interface AttemptData {
@@ -20,10 +26,11 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 }
 
-export async function writeAttemptData(data: AttemptData): Promise<string> {
+export async function writeAttemptData(data: AttemptData): Promise<void> {
   const headers = await getAuthHeaders();
-  const res = await fetch(`${FLP_STORAGE_API}?action=write`, {
+  const res = await fetchFlpEndpoint(archiveUrl(data.attempt_id), {
     method: 'POST',
+    signal: AbortSignal.timeout(12000),
     headers,
     body: JSON.stringify(data),
   });
@@ -33,18 +40,33 @@ export async function writeAttemptData(data: AttemptData): Promise<string> {
     throw new Error(err.error || `HTTP ${res.status}`);
   }
 
-  const { r2_key } = await res.json();
-  return r2_key;
+}
+
+function comparableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return item;
+    return Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]]));
+  });
+}
+
+export function matchesArchivedAttempt(expected: AttemptData, archived: AttemptData | null): boolean {
+  return archived !== null && comparableJson(expected) === comparableJson(archived);
+}
+
+export async function readArchivedAttempt(attemptId: string): Promise<AttemptData | null> {
+  return fetchReview(archiveUrl(attemptId));
 }
 
 export async function readAttemptData(r2Key: string): Promise<AttemptData | null> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`${FLP_STORAGE_API}?action=read&key=${encodeURIComponent(r2Key)}`, {
-    method: 'GET',
-    headers,
-  });
+  return fetchReview(`${FLP_STORAGE_API}?action=read&key=${encodeURIComponent(r2Key)}`);
+}
 
-  if (res.status === 404) return null;
+async function fetchReview(url: string | URL): Promise<AttemptData | null> {
+  const headers = await getAuthHeaders();
+  const init = { headers, signal: AbortSignal.timeout(12000) };
+  const res = typeof url === 'string' ? await fetch(url, init) : await fetchFlpEndpoint(url, init);
+
+  if (res.status === 404 || res.status === 410) return null;
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Failed to read attempt data' }));
     throw new Error(err.error || `HTTP ${res.status}`);

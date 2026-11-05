@@ -1,179 +1,66 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
-import { useToast } from '@/hooks/use-toast';
 import { FLPQuiz } from '@/components/FLPs/FLPQuiz';
-import { Loader2 } from 'lucide-react';
-
-interface MCQ {
-  id: string;
-  question: string;
-  options: string[];
-  correct_answer: string;
-  explanation: string;
-  chapter_id: string;
-}
-
-interface ShuffledMCQ extends Omit<MCQ, 'options'> {
-  shuffledOptions: string[];
-  originalCorrectIndex: number;
-}
-
-interface FLPSessionData {
-  shuffledMcqs: ShuffledMCQ[];
-  currentQuestionIndex: number;
-  userAnswers: Record<string, string | null>;
-  totalTimeLeft: number;
-  subjectName?: string;
-  sessionId?: string;
-  savedAt: number;
-}
-
-const FLP_STORAGE_KEY = 'flp_session';
+import { FlpQuizLoading } from '@/components/FLPs/FlpQuizLoading';
+import { getActiveFlp, type FlpDraft } from '@/utils/flpSession';
 
 const FLPTestPage = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { toast } = useToast();
+  const expectedSession = (location.state as { draft?: FlpDraft } | null)?.draft?.sessionId;
+  const paper = useQuery({
+    queryKey: ['flp-test-draft', user?.id, location.key],
+    queryFn: getActiveFlp,
+    enabled: !authLoading && Boolean(user?.id),
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
 
-  const [isLoading, setIsLoading] = useState(true);
-  const [mcqs, setMcqs] = useState<ShuffledMCQ[]>([]);
-  const [subjectName, setSubjectName] = useState('');
-  const [sessionId, setSessionId] = useState<string | undefined>();
-  const [initialIndex, setInitialIndex] = useState<number | undefined>();
-  const [initialAnswers, setInitialAnswers] = useState<Record<string, string | null> | undefined>();
-  const [initialTimeLeft, setInitialTimeLeft] = useState<number | undefined>();
+  if (authLoading || (user && paper.isPending)) return <FlpQuizLoading />;
 
-  useEffect(() => {
-    const loadQuizData = async () => {
-      if (!user) {
-        setIsLoading(false);
-        return;
-      }
+  const draft = paper.data;
+  const hasPaper = draft?.mcqs.length && (!expectedSession || draft.sessionId === expectedSession);
 
-      const state = location.state as {
-        mcqs?: ShuffledMCQ[];
-        subjectName?: string;
-        mcqCount?: number;
-        sessionId?: string;
-      } | null;
+  if (!user || paper.isError || !hasPaper) {
+    const title = !user ? 'Sign in required' : paper.isError ? 'Could not load your paper' : 'No active paper';
+    const description = !user ? 'Sign in to access your Full-Length Paper.'
+      : paper.isError ? paper.error.message : 'Start a paper from the FLP page.';
 
-      if (state?.mcqs && state.mcqs.length > 0) {
-        setMcqs(state.mcqs);
-        setSubjectName(state.subjectName || '');
-        setSessionId(state.sessionId);
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const saved = localStorage.getItem(FLP_STORAGE_KEY);
-        if (saved) {
-          const sessionData: FLPSessionData = JSON.parse(saved);
-          const hoursSinceSaved = (Date.now() - sessionData.savedAt) / (1000 * 60 * 60);
-          if (hoursSinceSaved < 24 && sessionData.shuffledMcqs.length > 0) {
-            setMcqs(sessionData.shuffledMcqs);
-            setSubjectName(sessionData.subjectName || '');
-            setSessionId(sessionData.sessionId);
-            setInitialIndex(sessionData.currentQuestionIndex);
-            setInitialAnswers(sessionData.userAnswers);
-            setInitialTimeLeft(sessionData.totalTimeLeft);
-            setIsLoading(false);
-            return;
-          } else {
-            localStorage.removeItem(FLP_STORAGE_KEY);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load FLP session", e);
-        localStorage.removeItem(FLP_STORAGE_KEY);
-      }
-
-      toast({
-        title: "No Active Session",
-        description: "Please start a new FLP test.",
-      });
-      navigate('/flp');
-    };
-
-    loadQuizData();
-  }, [user, location.state, navigate, toast]);
-
-  const handleFinish = (score: number, totalQuestions: number) => {
-    if (score === 0 && totalQuestions === 0) {
-      navigate('/flp');
-    } else {
-      setMcqs([]);
-      navigate('/flp-result', { replace: true });
-    }
-  };
-
-  if (authLoading || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground font-medium">Loading test...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-4 text-center">
-        <Card className="w-full max-w-md bg-card/90 backdrop-blur-sm border-border shadow-lg p-6">
-          <CardHeader className="mb-4">
-            <CardTitle className="text-2xl font-bold text-foreground">Sign In Required</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-6">Please sign in to access the Full-Length Paper test.</p>
-            <Button
-              onClick={() => navigate('/login')}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg shadow-md"
-            >
-              Go to Login
-            </Button>
+      <main className="flex min-h-dvh items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader><CardTitle>{title}</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">{description}</p>
+            <div className="flex flex-wrap gap-2">
+              {paper.isError && <Button onClick={() => void paper.refetch()}>Try again</Button>}
+              <Button variant={paper.isError ? 'outline' : 'default'} onClick={() => navigate(user ? '/flp' : '/login', { replace: true })}>
+                {user ? 'Back to FLP' : 'Sign in'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      </div>
-    );
-  }
-
-  if (mcqs.length === 0) {
-    return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background p-4 text-center">
-        <Card className="w-full max-w-md bg-card/90 backdrop-blur-sm border-border shadow-lg p-6">
-          <CardHeader className="mb-4">
-            <CardTitle className="text-2xl font-bold text-foreground">No Test Data</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-6">The test session is invalid or has expired.</p>
-            <Button
-              onClick={() => navigate('/flp')}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold py-2 px-4 rounded-lg shadow-md"
-            >
-              Start New Test
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+      </main>
     );
   }
 
   return (
     <FLPQuiz
-      mcqs={mcqs as unknown as MCQ[]}
-      onFinish={handleFinish}
+      key={draft.sessionId}
+      mcqs={draft.mcqs}
+      onFinish={() => navigate('/flp', { replace: true })}
       timePerQuestion={60}
-      subjectName={subjectName}
-      initialIndex={initialIndex}
-      initialAnswers={initialAnswers}
-      initialTimeLeft={initialTimeLeft}
-      sessionId={sessionId}
+      subjectName={draft.subjectName}
+      initialIndex={draft.currentQuestionIndex}
+      initialAnswers={draft.userAnswers}
+      initialTimeLeft={Math.max(0, Math.ceil((draft.deadline - Date.now()) / 1000))}
+      sessionId={draft.sessionId}
+      deadline={draft.deadline}
     />
   );
 };
